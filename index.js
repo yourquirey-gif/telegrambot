@@ -814,7 +814,7 @@ bot.command("setcontact",(ctx)=>{
 });
 
 // ADD CREDIT
-bot.command("addcredit",(ctx)=>{
+bot.command("addcredit", async (ctx) => {
 
     if(!isAdmin(ctx.from.id)) {
 
@@ -826,7 +826,7 @@ bot.command("addcredit",(ctx)=>{
     ctx.message.text.split(" ");
 
     const userId =
-    args[1];
+    String(args[1]);
 
     const amount =
     Number(args[2]);
@@ -840,9 +840,9 @@ bot.command("addcredit",(ctx)=>{
     }
 
     // AUTO CREATE USER
-    if(!users[userId]){
+    if(!users[String(userId)]){
 
-        users[userId] = {
+        users[String(userId)] = {
 
             credits: 0,
             joined: new Date().toLocaleString(),
@@ -852,8 +852,9 @@ bot.command("addcredit",(ctx)=>{
 
     }
 
-    users[userId].credits += amount;
+    users[String(userId)].credits += amount;
 
+    // ADMIN MESSAGE
     ctx.reply(
 
 `✅ Credits Added
@@ -864,10 +865,35 @@ ${userId}
 💎 Added :
 ${amount}
 
-💰 Total :
-${users[userId].credits}`
+🪙 Total :
+${users[String(userId)].credits}`
 
-);
+    );
+
+    // USER NOTIFICATION
+    try{
+
+        await bot.telegram.sendMessage(
+
+            userId,
+
+`🎉 Congratulations!
+
+💎 ${amount} credits added
+to your account.
+
+🪙 Current Balance :
+${users[String(userId)].credits} credits`
+
+        );
+
+    }catch(err){
+
+        console.log(
+            "User notification failed"
+        );
+
+    }
 
 });
 
