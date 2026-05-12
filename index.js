@@ -229,66 +229,64 @@ Markup.button.callback(
 
 bot.start(async(ctx)=>{
 
-    const joined =
+    const notJoined =
     await checkForceJoin(ctx);
 
-    if(!joined){
+    if(notJoined.length > 0){
 
         let buttons = [];
 
-        FORCE_CHANNELS.forEach((c)=>{
+        notJoined.forEach((c)=>{
 
             buttons.push([
+
                 Markup.button.url(
-                    "📢 Join Channel",
+                    `📢 Join ${c}`,
                     `https://t.me/${c.replace("@","")}`
                 )
+
             ]);
 
         });
 
         buttons.push([
+
             Markup.button.callback(
                 "✅ Joined",
                 "check_join"
             )
+
         ]);
 
-        ctx.reply(
+        return ctx.reply(
 
-`╔══════════════════════╗
- 🔒 JOIN REQUIRED
-╚══════════════════════╝
+`🔒 Please join all channels first
 
-⚠️ Join all channels first
-then tap Joined button.`,
+Then click ✅ Joined`,
 
 Markup.inlineKeyboard(buttons)
 
 );
 
-return;
+    }
 
-}
-
-sendHome(ctx);
+    sendHome(ctx);
 
 });
 
 // ================= CHECK JOIN =================
 
-bot.action("check_join",async(ctx)=>{
+bot.action("check_join", async(ctx)=>{
 
-    const joined =
+    const notJoined =
     await checkForceJoin(ctx);
 
-    if(!joined){
+    if(notJoined.length > 0){
 
-        ctx.answerCbQuery(
-            "❌ Join channel first"
+        return ctx.answerCbQuery(
+            "❌ Still not joined all channels",
+            { show_alert:true }
         );
-
-        return;
 
     }
 
