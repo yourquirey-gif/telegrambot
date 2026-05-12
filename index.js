@@ -984,6 +984,93 @@ ${ctx.from.id}`
 );
 
 });
+// REMOVE FORCE CHANNEL
+bot.command("removeforce", (ctx) => {
+
+    if(!isAdmin(ctx.from.id)) return;
+
+    const channel =
+    ctx.message.text.split(" ")[1];
+
+    if(!channel){
+
+        return ctx.reply(
+            "❌ Example:\n/removeforce @channel"
+        );
+
+    }
+
+    FORCE_CHANNELS =
+    FORCE_CHANNELS.filter(
+        c => c !== channel
+    );
+
+    ctx.reply(
+`✅ Force channel removed
+
+${channel}`
+    );
+
+});
+
+// TASK LIST
+bot.command("taskslist",(ctx)=>{
+
+    if(!isAdmin(ctx.from.id)) return;
+
+    if(tasks.length === 0){
+
+        return ctx.reply(
+            "❌ No tasks"
+        );
+
+    }
+
+    let text = "🎁 TASK LIST\n\n";
+
+    tasks.forEach((t)=>{
+
+        text +=
+`ID: ${t.id}
+Link: ${t.channel}
+Credits: ${t.credits}
+
+`;
+
+    });
+
+    ctx.reply(text);
+
+});
+
+// REMOVE TASK
+bot.command("removetask",(ctx)=>{
+
+    if(!isAdmin(ctx.from.id)) return;
+
+    const id =
+    Number(
+        ctx.message.text.split(" ")[1]
+    );
+
+    if(!id){
+
+        return ctx.reply(
+            "❌ Example:\n/removetask 1"
+        );
+
+    }
+
+    tasks =
+    tasks.filter(t => t.id !== id);
+
+    ctx.reply(
+`✅ Task removed
+
+ID: ${id}`
+    );
+
+});
 
 // ================= START BOT =================
 
