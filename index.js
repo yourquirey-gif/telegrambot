@@ -1101,35 +1101,38 @@ bot.command("removetask",(ctx)=>{
 ID: ${id}`);
 
 });
+
+// REMOVE CHANNEL
+
 bot.command("removechannel", (ctx) => {
 
-    if(!isAdmin(ctx.from.id)){
+   if(!isAdmin(ctx.from.id)){
+      return ctx.reply("❌ Admin only");
+   }
 
-        return ctx.reply(
-            "❌ Admin only"
-        );
+   const channel =
+   ctx.message.text.split(" ")[1];
 
-    }
+   if(!channel){
+      return ctx.reply(
+         "❌ Example:\n/removechannel @channel"
+      );
+   }
 
-    const channel =
-    ctx.message.text.split(" ")[1];
+   const index =
+   FORCE_CHANNELS.indexOf(channel);
 
-    if(!channel){
+   if(index === -1){
+      return ctx.reply(
+         "❌ Channel not found"
+      );
+   }
 
-        return ctx.reply(
-            "❌ Example:\n/removechannel @channel"
-        );
+   FORCE_CHANNELS.splice(index, 1);
 
-    }
-
-    FORCE_CHANNELS =
-    FORCE_CHANNELS.filter(
-        c => c !== channel
-    );
-
-    ctx.reply(
-`✅ Removed ${channel}`
-    );
+   ctx.reply(
+      `✅ Removed ${channel}`
+   );
 
 });
 
