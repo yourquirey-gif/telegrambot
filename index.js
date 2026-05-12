@@ -330,6 +330,14 @@ bot.action("devices",(ctx)=>{
         )
 
     ]);
+    
+    if(!users[ctx.from.id]){
+  users[ctx.from.id] = {
+    credits: 0,
+    joined: new Date().toLocaleString(),
+    completedTasks: []
+  };
+    }
 
     ctx.reply(
 
