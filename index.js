@@ -92,7 +92,9 @@ async function callApi(endpoint){
 
 async function checkForceJoin(ctx){
 
-    for(let channel of FORCE_CHANNELS){
+    let notJoined = [];
+
+    for(const channel of FORCE_CHANNELS){
 
         try{
 
@@ -103,24 +105,24 @@ async function checkForceJoin(ctx){
             );
 
             if(
-                member.status != "member" &&
-                member.status != "creator" &&
-                member.status != "administrator"
+                member.status !== "member" &&
+                member.status !== "creator" &&
+                member.status !== "administrator"
             ){
 
-                return false;
+                notJoined.push(channel);
 
             }
 
         }catch{
 
-            return false;
+            notJoined.push(channel);
 
         }
 
     }
 
-    return true;
+    return notJoined;
 
 }
 
