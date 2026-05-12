@@ -105,9 +105,8 @@ async function checkForceJoin(ctx){
             );
 
             if(
-                member.status !== "member" &&
-                member.status !== "creator" &&
-                member.status !== "administrator"
+                member.status === "left" ||
+                member.status === "kicked"
             ){
 
                 notJoined.push(channel);
