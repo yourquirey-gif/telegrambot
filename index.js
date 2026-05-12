@@ -1090,11 +1090,8 @@ bot.command("removetask",(ctx)=>{
     tasks =
     tasks.filter(t => t.id !== id);
 
-    ctx.reply(
-`✅ Task removed
-
-ID: ${id}`
-    );
+    ctx.reply(`✅ Task removed
+ID: ${id}`);
 
 });
 
