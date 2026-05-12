@@ -607,7 +607,7 @@ bot.action("referral",(ctx)=>{
 
 🔗 Your Link :
 
-https://t.me/YOUR_BOT?start=${userId}
+https://t.me/tgfreeotpbot?start=${userId}
 
 🎁 1 referral = 1 credit`
 
