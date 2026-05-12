@@ -1102,6 +1102,37 @@ bot.command("removetask",(ctx)=>{
 ID: ${id}`);
 
 });
+bot.command("removechannel", (ctx) => {
+
+    if(!isAdmin(ctx.from.id)){
+
+        return ctx.reply(
+            "❌ Admin only"
+        );
+
+    }
+
+    const channel =
+    ctx.message.text.split(" ")[1];
+
+    if(!channel){
+
+        return ctx.reply(
+            "❌ Example:\n/removechannel @channel"
+        );
+
+    }
+
+    FORCE_CHANNELS =
+    FORCE_CHANNELS.filter(
+        c => c !== channel
+    );
+
+    ctx.reply(
+`✅ Removed ${channel}`
+    );
+
+});
 
 // ================= START BOT =================
 
