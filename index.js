@@ -1146,3 +1146,10 @@ bot.launch();
 console.log("BOT RUNNING...");
 // KEEP ALIVE FOR RENDER
 setInterval(() => {}, 1000);
+app.get("/", (req, res) => {
+   res.send("Bot running");
+});
+
+app.listen(process.env.PORT || 3000, () => {
+   console.log("Web server running");
+});
