@@ -990,3 +990,5 @@ ${ctx.from.id}`
 bot.launch();
 
 console.log("BOT RUNNING...");
+// KEEP ALIVE FOR RENDER
+setInterval(() => {}, 1000);
