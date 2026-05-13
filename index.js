@@ -843,6 +843,71 @@ bot.command("testlog", async(ctx)=>{
 
 });
 
+// ================= BROADCAST =================
+
+bot.command("broadcast", async (ctx) => {
+
+    if(!isAdmin(ctx.from.id))
+    return ctx.reply("❌ Admin only");
+
+    const message =
+    ctx.message.text.split(" ").slice(1).join(" ");
+
+    if(!message){
+        return ctx.reply(
+            "❌ Example:\n/broadcast Hello users"
+        );
+    }
+
+    const users =
+    await User.find();
+
+    let success = 0;
+    let failed = 0;
+
+    ctx.reply(
+        `📢 Broadcasting to ${users.length} users...`
+    );
+
+    for(const user of users){
+
+        try{
+
+            await bot.telegram.sendMessage(
+                user.userId,
+                message,
+                {
+                    parse_mode: "HTML"
+                }
+            );
+
+            success++;
+
+        }catch{
+
+            failed++;
+
+        }
+
+    }
+
+    ctx.reply(
+
+`✅ Broadcast Completed
+
+👥 Total Users:
+${users.length}
+
+✅ Success:
+${success}
+
+❌ Failed:
+${failed}`
+
+    );
+
+});
+
 // ================= START BOT =================
 
 bot.launch();
