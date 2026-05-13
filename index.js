@@ -385,7 +385,7 @@ bot.start(async(ctx)=>{
         ]);
 
         return ctx.reply(
-            🔒 Please join all channels first\n\nThen click ✅ Joined,
+            `🔒 Please join all channels first\n\nThen click ✅ Joined`,
             Markup.inlineKeyboard(buttons)
         );
 
