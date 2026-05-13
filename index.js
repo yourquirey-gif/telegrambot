@@ -66,6 +66,17 @@ const ForceChannel = mongoose.model(
    forceSchema
 );
 
+const adminSchema = new mongoose.Schema({
+
+   userId: String
+
+});
+
+const Admin = mongoose.model(
+   "Admin",
+   adminSchema
+);
+
 async function loadDefaultForce(){
 
    const exists =
