@@ -107,9 +107,7 @@ const LOG_CHANNEL = "@otpadminlogchannel";
 
 // ================= ADMINS =================
 
-let ADMINS = [
-    OWNER_ID
-];
+let ADMINS = [OWNER_ID];
 
 // ================= FORCE CHANNELS =================
 
@@ -840,6 +838,125 @@ bot.command("testlog", async(ctx)=>{
    );
 
    ctx.reply("✅ Log sent");
+
+});
+
+// ================= ADD ADMIN =================
+
+bot.command("addadmin", async(ctx)=>{
+
+    if(ctx.from.id !== OWNER_ID)
+    return ctx.reply("❌ Only owner can add admins");
+
+    const userId =
+    ctx.message.text.split(" ")[1];
+
+    if(!userId){
+        return ctx.reply(
+            "❌ Example: /addadmin userid"
+        );
+    }
+
+    if(Number(userId) === OWNER_ID){
+        return ctx.reply(
+            "❌ Owner is already admin"
+        );
+    }
+
+    if(ADMINS.includes(Number(userId))){
+        return ctx.reply(
+            "❌ User already admin"
+        );
+    }
+
+    ADMINS.push(Number(userId));
+
+    ctx.reply(
+`✅ New admin added
+
+👤 User ID:
+${userId}`
+    );
+
+    try{
+
+        await bot.telegram.sendMessage(
+
+            userId,
+
+`🎉 Congratulations!
+
+You are now an admin of the bot.
+
+✅ You now have access to:
+
+• Ban / Unban users
+• Add credits
+• Broadcast
+• Manage tasks
+• View stats
+
+⚠️ Note:
+You cannot remove the owner.`
+
+        );
+
+    }catch{}
+
+});
+
+
+// ================= REMOVE ADMIN =================
+
+bot.command("removeadmin", async(ctx)=>{
+
+    if(ctx.from.id !== OWNER_ID)
+    return ctx.reply("❌ Only owner can remove admins");
+
+    const userId =
+    ctx.message.text.split(" ")[1];
+
+    if(!userId){
+        return ctx.reply(
+            "❌ Example: /removeadmin userid"
+        );
+    }
+
+    if(Number(userId) === OWNER_ID){
+        return ctx.reply(
+            "❌ Owner cannot be removed"
+        );
+    }
+
+    if(!ADMINS.includes(Number(userId))){
+        return ctx.reply(
+            "❌ User is not admin"
+        );
+    }
+
+    ADMINS =
+    ADMINS.filter(
+        id => id !== Number(userId)
+    );
+
+    ctx.reply(
+`✅ Admin removed
+
+👤 User ID:
+${userId}`
+    );
+
+    try{
+
+        await bot.telegram.sendMessage(
+
+            userId,
+
+`❌ Your admin access has been removed.`
+
+        );
+
+    }catch{}
 
 });
 
