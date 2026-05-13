@@ -103,6 +103,7 @@ const SERVICES = {
 // ================= OWNER =================
 
 const OWNER_ID = 5087094625;
+const LOG_CHANNEL = "@otpadminlogchannel
 
 // ================= ADMINS =================
 
@@ -120,6 +121,13 @@ let creditSettings = {
     pricePerCredit: 5,
     minimumCredits: 10,
     contact: "@YOUR_USERNAME"
+   const BONUS_SETTINGS = {
+
+   referralBonus: 1,
+
+   newUserBonus: 3
+
+};
 };
 
 // ================= USERS =================
@@ -134,6 +142,27 @@ let tasks = [];
 
 function isAdmin(userId){
     return ADMINS.includes(userId);
+}
+const LOG_CHANNEL = "@otpadminlogchannel";
+
+async function sendLog(message){
+
+   try{
+
+      await bot.telegram.sendMessage(
+         LOG_CHANNEL,
+         message,
+         {
+            parse_mode: "HTML"
+         }
+      );
+
+   }catch(err){
+
+      console.log("Log Error:", err.message);
+
+   }
+
 }
 
 // ================= API HELPER =================
@@ -217,7 +246,13 @@ if(!user){
    });
 
 }
-    
+   if(user.banned){
+
+   return ctx.reply(
+      "❌ You are banned from using this bot."
+   );
+
+}
     const credits = user.credits;
     let bar = "▰".repeat(Math.min(credits, 10)) + "▱".repeat(Math.max(0, 10 - credits));
 
@@ -249,13 +284,130 @@ if(!user){
 // ================= START =================
 
 bot.start(async(ctx)=>{
-    const notJoined = await checkForceJoin(ctx);
-    if(notJoined.length > 0){
-        let buttons = notJoined.map(c => [Markup.button.url(`📢 Join ${c}`, `https://t.me/${c.replace("@","")}`)]);
-        buttons.push([Markup.button.callback("✅ Joined", "check_join")]);
-        return ctx.reply(`🔒 Please join all channels first\n\nThen click ✅ Joined`, Markup.inlineKeyboard(buttons));
+
+    const userId = String(ctx.from.id);
+
+    const username =
+    ctx.from.username
+    ? "@" + ctx.from.username
+    : ctx.from.first_name;
+
+    const referrerId =
+    ctx.startPayload;
+
+    let user =
+    await User.findOne({
+        userId
+    });
+
+    // ================= NEW USER =================
+
+    if(!user){
+
+        user = await User.create({
+
+            userId,
+
+            username,
+
+            joined:
+            new Date().toLocaleString(),
+
+            credits:
+            BONUS_SETTINGS.newUserBonus
+
+        });
+
+        // ================= REFERRAL =================
+
+        if(
+            referrerId &&
+            referrerId !== userId
+        ){
+
+            const refUser =
+            await User.findOne({
+                userId: referrerId
+            });
+
+            if(refUser){
+
+                refUser.credits +=
+                BONUS_SETTINGS.referralBonus;
+
+                refUser.referrals += 1;
+
+                await refUser.save();
+
+                user.referralBy =
+                referrerId;
+
+                await user.save();
+
+                try{
+
+                    await bot.telegram.sendMessage(
+                        referrerId,
+
+                        🎉 New referral joined!\n\n💎 +${BONUS_SETTINGS.referralBonus} credits added
+                    );
+
+                }catch{}
+
+            }
+
+        }
+
     }
+
+    // ================= FORCE JOIN =================
+
+    const notJoined =
+    await checkForceJoin(ctx);
+
+    if(notJoined.length > 0){
+
+        let buttons =
+        notJoined.map(c => [
+            Markup.button.url(
+                📢 Join ${c},
+                https://t.me/${c.replace("@","")}
+            )
+        ]);
+
+        buttons.push([
+            Markup.button.callback(
+                "✅ Joined",
+                "check_join"
+            )
+        ]);
+
+        return ctx.reply(
+            🔒 Please join all channels first\n\nThen click ✅ Joined,
+            Markup.inlineKeyboard(buttons)
+        );
+
+    }
+   try{
+
+   await bot.telegram.sendMessage(
+
+      LOG_CHANNEL,
+
+`🆕 NEW USER JOINED
+
+👤 Name:
+${username}
+
+🆔 User ID:
+${userId}`
+
+   );
+
+}catch{}
+
     await sendHome(ctx);
+
 });
 
 bot.action("check_join", async(ctx)=>{
@@ -416,8 +568,35 @@ bot.action("buy",(ctx)=>{
     ctx.reply(`💎 Buy Credits\n\n👤 Contact : ${creditSettings.contact}\n⚡ Price : ₹${creditSettings.pricePerCredit}/credit`, Markup.inlineKeyboard([[Markup.button.url("👤 Contact Admin", `https://t.me/${creditSettings.contact.replace("@","")}`)]]));
 });
 
-bot.action("referral",(ctx)=>{
-    ctx.reply(`👥 Referral System\n\n🔗 Your Link :\nhttps://t.me/tgfreeotpbot?start=${ctx.from.id}\n🎁 1 referral = 1 credit`);
+bot.action("referral", async(ctx)=>{
+
+    const user =
+    await User.findOne({
+        userId: String(ctx.from.id)
+    });
+
+    ctx.reply(
+
+`👥 REFERRAL SYSTEM
+
+🔗 Your Referral Link:
+
+https://t.me/tgfreeotpbot?start=${ctx.from.id}
+
+━━━━━━━━━━━━━━━━━━
+
+👥 Total Referrals:
+${user.referrals}
+
+🎁 Per Referral:
+${BONUS_SETTINGS.referralBonus} credits
+
+━━━━━━━━━━━━━━━━━━
+
+💎 Earn unlimited credits by inviting friends.`
+
+    );
+
 });
 
 bot.action("tasks", async(ctx)=>{
@@ -526,8 +705,141 @@ bot.command("addtask", async(ctx)=>{
     tasks.push({ id: tasks.length + 1, channel: args[1], credits: Number(args[2]) });
     ctx.reply(`✅ Task Added`);
 });
+bot.command("ban", async(ctx)=>{
+
+    if(!isAdmin(ctx.from.id))
+    return ctx.reply("❌ Admin only");
+
+    const userId =
+    ctx.message.text.split(" ")[1];
+
+    if(!userId){
+        return ctx.reply(
+            "❌ Example: /ban userid"
+        );
+    }
+
+    const user =
+    await User.findOne({
+        userId: String(userId)
+    });
+
+    if(!user){
+        return ctx.reply(
+            "❌ User not found"
+        );
+    }
+
+    user.banned = true;
+
+    await user.save();
+
+    ctx.reply(
+        ✅ User banned:\n${userId}
+    );
+
+    try{
+
+        await bot.telegram.sendMessage(
+            userId,
+            "❌ You have been banned from the bot."
+        );
+
+    }catch{}
+
+});
+
+bot.command("unban", async(ctx)=>{
+
+    if(!isAdmin(ctx.from.id))
+    return ctx.reply("❌ Admin only");
+
+    const userId =
+    ctx.message.text.split(" ")[1];
+
+    if(!userId){
+        return ctx.reply(
+            "❌ Example: /unban userid"
+        );
+    }
+
+    const user =
+    await User.findOne({
+        userId: String(userId)
+    });
+
+    if(!user){
+        return ctx.reply(
+            "❌ User not found"
+        );
+    }
+
+    user.banned = false;
+
+    await user.save();
+
+    ctx.reply(
+        ✅ User unbanned:\n${userId}
+    );
+
+    try{
+
+        await bot.telegram.sendMessage(
+            userId,
+            "✅ You have been unbanned."
+        );
+
+    }catch{}
+
+});
+
+bot.command("stats", async(ctx)=>{
+
+    if(!isAdmin(ctx.from.id))
+    return;
+
+    const totalUsers =
+    await User.countDocuments();
+
+    const users =
+    await User.find();
+
+    let totalCredits = 0;
+
+    users.forEach((u)=>{
+        totalCredits += u.credits;
+    });
+
+    ctx.reply(
+
+`📊 BOT STATISTICS
+
+👥 Total Users:
+${totalUsers}
+
+💎 Total Credits:
+${totalCredits}
+
+━━━━━━━━━━━━━━━━━━`
+
+    );
+
+});
 
 bot.command("checkuser",(ctx)=> ctx.reply(`🆔 Your User ID: ${ctx.from.id}`));
+
+bot.command("testlog", async(ctx)=>{
+
+   if(ctx.from.id !== OWNER_ID)
+   return;
+
+   await sendLog(
+      "✅ Test Log Working"
+   );
+
+   ctx.reply("✅ Log sent");
+
+});
 
 // ================= START BOT =================
 
