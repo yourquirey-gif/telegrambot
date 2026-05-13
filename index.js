@@ -781,7 +781,7 @@ bot.command("unban", async(ctx)=>{
     await user.save();
 
     ctx.reply(
-        ✅ User unbanned:\n${userId}
+        `✅ User unbanned:\n${userId}`
     );
 
     try{
