@@ -737,7 +737,7 @@ bot.command("ban", async(ctx)=>{
     await user.save();
 
     ctx.reply(
-        ✅ User banned:\n${userId}
+        `✅ User banned:\n${userId}`
     );
 
     try{
