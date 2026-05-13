@@ -729,7 +729,7 @@ bot.command("addtask", async(ctx)=>{
 });
 bot.command("ban", async(ctx)=>{
 
-    if(!isAdmin(ctx.from.id))
+    if(!(await isAdmin(ctx.from.id)))
     return ctx.reply("❌ Admin only");
 
     const userId =
@@ -773,7 +773,7 @@ bot.command("ban", async(ctx)=>{
 
 bot.command("unban", async(ctx)=>{
 
-    if(!isAdmin(ctx.from.id))
+    if(!(await isAdmin(ctx.from.id)))
     return ctx.reply("❌ Admin only");
 
     const userId =
@@ -817,7 +817,7 @@ bot.command("unban", async(ctx)=>{
 
 bot.command("stats", async(ctx)=>{
 
-    if(!isAdmin(ctx.from.id))
+    if(!(await isAdmin(ctx.from.id)))
     return;
 
     const totalUsers =
@@ -1002,7 +1002,7 @@ You are now using the bot as a normal user.
 
 bot.command("broadcast", async (ctx) => {
 
-    if(!isAdmin(ctx.from.id))
+    if(!(await isAdmin(ctx.from.id)))
     return ctx.reply("❌ Admin only");
 
     const message =
