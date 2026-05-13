@@ -721,7 +721,7 @@ bot.command("addforce", async(ctx)=>{
 });
 
 bot.command("addtask", async(ctx)=>{
-    if(!isAdmin(ctx.from.id)) return;
+    if(!(await isAdmin(ctx.from.id))) return;
     const args = ctx.message.text.split(" ");
     if(!args[1] || !args[2]) return ctx.reply("❌ Example: /addtask link 5");
     tasks.push({ id: tasks.length + 1, channel: args[1], credits: Number(args[2]) });
