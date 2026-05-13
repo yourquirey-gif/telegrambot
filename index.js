@@ -347,10 +347,12 @@ bot.start(async(ctx)=>{
                 try{
 
                     await bot.telegram.sendMessage(
-                        referrerId,
+    referrerId,
 
-                        🎉 New referral joined!\n\n💎 +${BONUS_SETTINGS.referralBonus} credits added
-                    );
+`🎉 New referral joined!
+
+💎 +${BONUS_SETTINGS.referralBonus} credits added`
+);
 
                 }catch{}
 
