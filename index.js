@@ -863,6 +863,261 @@ bot.command("testlog", async(ctx)=>{
 
 });
 
+// ================= ADMIN PANEL =================
+
+bot.command("admin", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id))){
+        return ctx.reply("❌ Admin only");
+    }
+
+    ctx.reply(
+
+`⚙️ ADMIN PANEL
+
+Select an option below`,
+
+Markup.inlineKeyboard([
+
+[
+Markup.button.callback(
+"📊 Stats",
+"admin_stats"
+)
+],
+
+[
+Markup.button.callback(
+"💎 Add Credit",
+"admin_addcredit"
+),
+
+Markup.button.callback(
+"📢 Broadcast",
+"admin_broadcast"
+)
+],
+
+[
+Markup.button.callback(
+"🚫 Ban User",
+"admin_ban"
+),
+
+Markup.button.callback(
+"✅ Unban User",
+"admin_unban"
+)
+],
+
+[
+Markup.button.callback(
+"📢 Add Force",
+"admin_addforce"
+),
+
+Markup.button.callback(
+"🎁 Add Task",
+"admin_addtask"
+)
+],
+
+[
+Markup.button.callback(
+"💰 Set Price",
+"admin_setprice"
+),
+
+Markup.button.callback(
+"🛒 Set Minimum",
+"admin_setminimum"
+)
+],
+
+[
+Markup.button.callback(
+"👤 Change Contact",
+"admin_setcontact"
+)
+],
+
+[
+Markup.button.callback(
+"👑 Add Admin",
+"admin_addadmin"
+),
+
+Markup.button.callback(
+"❌ Remove Admin",
+"admin_removeadmin"
+)
+]
+
+])
+
+    );
+
+});
+
+
+// ================= ADMIN BUTTON ACTIONS =================
+
+bot.action("admin_stats", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return;
+
+    ctx.reply(
+`📊 Use Command:
+
+/stats`
+    );
+
+});
+
+bot.action("admin_addcredit", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return;
+
+    ctx.reply(
+`💎 Use Command:
+
+/addcredit userid amount`
+    );
+
+});
+
+bot.action("admin_broadcast", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return;
+
+    ctx.reply(
+`📢 Use Command:
+
+/broadcast your message`
+    );
+
+});
+
+bot.action("admin_ban", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return;
+
+    ctx.reply(
+`🚫 Use Command:
+
+/ban userid`
+    );
+
+});
+
+bot.action("admin_unban", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return;
+
+    ctx.reply(
+`✅ Use Command:
+
+/unban userid`
+    );
+
+});
+
+bot.action("admin_addforce", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return;
+
+    ctx.reply(
+`📢 Use Command:
+
+/addforce @channel`
+    );
+
+});
+
+bot.action("admin_addtask", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return;
+
+    ctx.reply(
+`🎁 Use Command:
+
+/addtask link credits`
+    );
+
+});
+
+bot.action("admin_setprice", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return;
+
+    ctx.reply(
+`💰 Use Command:
+
+/setprice amount`
+    );
+
+});
+
+bot.action("admin_setminimum", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return;
+
+    ctx.reply(
+`🛒 Use Command:
+
+/setminimum amount`
+    );
+
+});
+
+bot.action("admin_setcontact", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return;
+
+    ctx.reply(
+`👤 Use Command:
+
+/setcontact @username`
+    );
+
+});
+
+bot.action("admin_addadmin", async(ctx)=>{
+
+    if(ctx.from.id !== OWNER_ID)
+    return;
+
+    ctx.reply(
+`👑 Use Command:
+
+/addadmin userid`
+    );
+
+});
+
+bot.action("admin_removeadmin", async(ctx)=>{
+
+    if(ctx.from.id !== OWNER_ID)
+    return;
+
+    ctx.reply(
+`❌ Use Command:
+
+/removeadmin userid`
+    );
+
+});
+
 // ================= ADD ADMIN =================
 
 bot.command("addadmin", async(ctx)=>{
