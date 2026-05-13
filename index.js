@@ -118,7 +118,7 @@ const LOG_CHANNEL = "@otpadminlogchannel";
 
 // ================= ADMINS =================
 
-let ADMINS = [OWNER_ID];
+
 
 // ================= FORCE CHANNELS =================
 
