@@ -651,12 +651,68 @@ bot.action("home", async(ctx)=>{
 
 // ================= ADMIN COMMANDS =================
 
-bot.command("setprice",(ctx)=>{
+bot.command("setprice", async(ctx)=>{
     if(!(await isAdmin(ctx.from.id))) return ctx.reply("❌ Admin only");
     const amount = Number(ctx.message.text.split(" ")[1]);
     if(!amount) return ctx.reply("❌ Example: /setprice 5");
     creditSettings.pricePerCredit = amount;
     ctx.reply(`✅ Price Updated: ₹${amount}`);
+});
+// ================= SET MINIMUM =================
+
+bot.command("setminimum", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return ctx.reply("❌ Admin only");
+
+    const amount =
+    Number(ctx.message.text.split(" ")[1]);
+
+    if(!amount){
+        return ctx.reply(
+            "❌ Example: /setminimum 10"
+        );
+    }
+
+    creditSettings.minimumCredits =
+    amount;
+
+    ctx.reply(
+`✅ Minimum credits updated
+
+🛒 New Minimum:
+${amount}`
+    );
+
+});
+
+
+// ================= SET CONTACT =================
+
+bot.command("setcontact", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return ctx.reply("❌ Admin only");
+
+    const username =
+    ctx.message.text.split(" ")[1];
+
+    if(!username){
+        return ctx.reply(
+            "❌ Example: /setcontact @username"
+        );
+    }
+
+    creditSettings.contact =
+    username;
+
+    ctx.reply(
+`✅ Contact updated
+
+👤 New Contact:
+${username}`
+    );
+
 });
 
 bot.command("addcredit", async (ctx) => {
