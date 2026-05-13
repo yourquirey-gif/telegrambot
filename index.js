@@ -103,7 +103,7 @@ const SERVICES = {
 // ================= OWNER =================
 
 const OWNER_ID = 5087094625;
-const LOG_CHANNEL = "@otpadminlogchannel
+const LOG_CHANNEL = "@otpadminlogchannel";
 
 // ================= ADMINS =================
 
