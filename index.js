@@ -492,7 +492,7 @@ if(user.credits <= 0){
     ctx.answerCbQuery("Allocating Number...");
 
     // Fetching number from API (India as default)
-    const order = await callApi(`/buy/activation/india/any/${service}`);
+    const order = await callApi(`/buy/activation/any/any/${service}`);
 
     if(!order){
         return ctx.reply("❌ No numbers available for this service right now. Please try again later.");
