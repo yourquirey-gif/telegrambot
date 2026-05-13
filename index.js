@@ -3,8 +3,87 @@ const app = express();
 
 const { Telegraf, Markup } = require("telegraf");
 const axios = require("axios");
+const mongoose = require("mongoose");
+
+mongoose.connect(process.env.MONGO_URI)
+.then(() => {
+   console.log("MongoDB Connected");
+})
+.catch((err) => {
+   console.log(err);
+});
 
 const bot = new Telegraf("8380776869:AAHVdovNrrAMjsPwU2DRDAmkTqEQauCsdKI");
+
+const userSchema = new mongoose.Schema({
+
+   userId: String,
+
+   username: String,
+
+   credits: {
+      type: Number,
+      default: 3
+   },
+
+   joined: String,
+
+   banned: {
+      type: Boolean,
+      default: false
+   },
+
+   referralBy: {
+      type: String,
+      default: null
+   },
+
+   referrals: {
+      type: Number,
+      default: 0
+   },
+
+   completedTasks: {
+      type: Array,
+      default: []
+   }
+
+});
+
+const User = mongoose.model(
+   "User",
+   userSchema
+);
+
+const forceSchema = new mongoose.Schema({
+
+   channel: String
+
+});
+
+const ForceChannel = mongoose.model(
+   "ForceChannel",
+   forceSchema
+);
+
+async function loadDefaultForce(){
+
+   const exists =
+   await ForceChannel.findOne({
+      channel: "@updatechannelforotp"
+   });
+
+   if(!exists){
+
+      await ForceChannel.create({
+         channel: "@updatechannelforotp"
+      });
+
+   }
+
+}
+
+ loadDefaultForce();
 
 // ================= API CONFIG =================
 
@@ -33,9 +112,7 @@ let ADMINS = [
 
 // ================= FORCE CHANNELS =================
 
-let FORCE_CHANNELS = [
-    "@updatechannelforotp"
-];
+
 
 // ================= CREDIT SETTINGS =================
 
@@ -47,7 +124,7 @@ let creditSettings = {
 
 // ================= USERS =================
 
-let users = {};
+
 
 // ================= TASKS =================
 
@@ -83,35 +160,65 @@ async function callApi(endpoint){
 // ================= FORCE JOIN CHECK =================
 
 async function checkForceJoin(ctx){
-    let notJoined = [];
-    for(const channel of FORCE_CHANNELS){
-        try{
-            const member = await ctx.telegram.getChatMember(channel, ctx.from.id);
-            if(member.status === "left" || member.status === "kicked"){
-                notJoined.push(channel);
-            }
-        }catch{
-            notJoined.push(channel);
-        }
-    }
-    return notJoined;
-}
 
+    const channels = await ForceChannel.find();
+
+    let notJoined = [];
+
+    for(const ch of channels){
+
+        try{
+
+            const member =
+            await ctx.telegram.getChatMember(
+                ch.channel,
+                ctx.from.id
+            );
+
+            if(
+                member.status === "left" ||
+                member.status === "kicked"
+            ){
+                notJoined.push(ch.channel);
+            }
+
+        }catch{
+
+            notJoined.push(ch.channel);
+
+        }
+
+    }
+
+    return notJoined;
+
+}
 // ================= HOME =================
 
 async function sendHome(ctx){
     const userId = ctx.from.id;
     const username = ctx.from.username ? "@" + ctx.from.username : ctx.from.first_name;
 
-    if(!users[userId]){
-        users[userId] = {
-            credits: 3,
-            joined: new Date().toLocaleString(),
-            completedTasks: []
-        };
-    }
+let user = await User.findOne({
+   userId: String(userId)
+});
 
-    const credits = users[userId].credits;
+if(!user){
+
+   user = await User.create({
+
+      userId: String(userId),
+
+      username: username,
+
+      joined:
+      new Date().toLocaleString()
+
+   });
+
+}
+    
+    const credits = user.credits;
     let bar = "▰".repeat(Math.min(credits, 10)) + "▱".repeat(Math.max(0, 10 - credits));
 
     ctx.reply(
@@ -148,19 +255,24 @@ bot.start(async(ctx)=>{
         buttons.push([Markup.button.callback("✅ Joined", "check_join")]);
         return ctx.reply(`🔒 Please join all channels first\n\nThen click ✅ Joined`, Markup.inlineKeyboard(buttons));
     }
-    sendHome(ctx);
+    await sendHome(ctx);
 });
 
 bot.action("check_join", async(ctx)=>{
     const notJoined = await checkForceJoin(ctx);
     if(notJoined.length > 0) return ctx.answerCbQuery("❌ Still not joined all channels", { show_alert:true });
     ctx.answerCbQuery("✅ Verified");
-    sendHome(ctx);
+    await sendHome(ctx);
 });
 
 // ================= DEVICES (Category Fetch) =================
 
-bot.action("devices",(ctx)=>{
+bot.action("devices", async(ctx)=>{
+    const user = await User.findOne({
+   userId: String(ctx.from.id)
+});
+
+const credits = user.credits;
     let buttons = [];
     Object.keys(SERVICES).forEach((name)=>{
         buttons.push([Markup.button.callback(`📂 ${name}`, `buy_srv_${SERVICES[name]}`)]);
@@ -171,9 +283,7 @@ bot.action("devices",(ctx)=>{
         Markup.button.callback("🏠 Home", "home")
     ]);
     
-    if(!users[ctx.from.id]){
-        users[ctx.from.id] = { credits: 0, joined: new Date().toLocaleString(), completedTasks: [] };
-    }
+
 
     ctx.reply(
 `╔══════════════════════╗
@@ -182,7 +292,7 @@ bot.action("devices",(ctx)=>{
 
 Select a category to get a number
 
-💎 Credits : ${users[ctx.from.id].credits}
+💎 Credits : ${credits}
 
 ━━━━━━━━━━━━━━━━━━`,
 Markup.inlineKeyboard(buttons));
@@ -194,7 +304,16 @@ bot.action(/buy_srv_(.+)/, async(ctx)=>{
     const service = ctx.match[1];
     const userId = ctx.from.id;
 
-    if(users[userId].credits <= 0) return ctx.answerCbQuery("❌ No credits left", { show_alert:true });
+    const user = await User.findOne({
+   userId: String(userId)
+});
+
+if(user.credits <= 0){
+   return ctx.answerCbQuery(
+      "❌ No credits left",
+      { show_alert:true }
+   );
+}
 
     ctx.answerCbQuery("Allocating Number...");
 
@@ -239,7 +358,13 @@ bot.action(/api_otp_(.+)/, async(ctx)=>{
 
     if(data.sms && data.sms.length > 0){
         const otp = data.sms[data.sms.length - 1].code;
-        users[userId].credits -= 1; // Deduct only on success
+        const user = await User.findOne({
+   userId: String(userId)
+});
+
+user.credits -= 1;
+
+await user.save(); // Deduct only on success
 
         ctx.reply(
 `╔══════════════════════╗
@@ -250,7 +375,7 @@ bot.action(/api_otp_(.+)/, async(ctx)=>{
 🔐 OTP : <code>${otp}</code>
 
 💎 -1 Credit Deducted
-💰 Remaining : ${users[userId].credits} credits`,
+💰 Remaining : ${user.credits} credits`,
 { parse_mode:"HTML" });
     } else {
         ctx.reply(
@@ -271,14 +396,18 @@ bot.action(/cancel_(.+)/, async (ctx) => {
     const res = await callApi(`/cancel/${orderId}`);
     ctx.answerCbQuery("Order Cancelled ✅");
     ctx.reply("❌ Order has been cancelled.");
-    sendHome(ctx);
+    await sendHome(ctx);
 });
 
 // ================= CREDITS, REFERRAL, TASKS (Rest of your code) =================
 
-bot.action("credits",(ctx)=>{
+bot.action("credits", async(ctx)=>{
     const userId = ctx.from.id;
-    const credits = users[userId].credits;
+    const user = await User.findOne({
+   userId: String(userId)
+});
+
+const credits = user.credits;
     const totalPrice = creditSettings.minimumCredits * creditSettings.pricePerCredit;
     ctx.reply(`╔══════════════════════╗\n 💎 MY CREDIT WALLET\n╚══════════════════════╝\n\n💰 Balance : ${credits} credits\n━━━━━━━━━━━━━━━━━━\n₹${creditSettings.pricePerCredit}/credit\nMinimum : ${creditSettings.minimumCredits}\n━━━━━━━━━━━━━━━━━━\nAmount : ₹${totalPrice}\n━━━━━━━━━━━━━━━━━━\n👤 Contact : ${creditSettings.contact}`, Markup.inlineKeyboard([[Markup.button.callback("🛒 Buy Credits", "buy")]]));
 });
@@ -291,24 +420,33 @@ bot.action("referral",(ctx)=>{
     ctx.reply(`👥 Referral System\n\n🔗 Your Link :\nhttps://t.me/tgfreeotpbot?start=${ctx.from.id}\n🎁 1 referral = 1 credit`);
 });
 
-bot.action("tasks",(ctx)=>{
+bot.action("tasks", async(ctx)=>{
     if(tasks.length === 0) return ctx.reply("❌ No tasks available");
     let buttons = tasks.map(t => [Markup.button.url(`🎁 Earn ${t.credits}💎`, t.channel), Markup.button.callback("✅ Claim", `claim_${t.id}`)]);
     ctx.reply(`🎁 TASKS\n\nComplete tasks and earn credits`, Markup.inlineKeyboard(buttons));
 });
 
-bot.action(/claim_(.+)/,(ctx)=>{
+bot.action(/claim_(.+)/, async(ctx)=>{
     const userId = ctx.from.id;
     const taskId = Number(ctx.match[1]);
     const task = tasks.find((t)=> t.id === taskId);
     if(!task) return ctx.reply("❌ Task not found");
-    if(users[userId].completedTasks.includes(taskId)) return ctx.answerCbQuery("❌ Already claimed");
-    users[userId].credits += task.credits;
-    users[userId].completedTasks.push(taskId);
+    const user = await User.findOne({
+   userId: String(userId)
+});
+
+if(user.completedTasks.includes(taskId)) return ctx.answerCbQuery("❌ Already claimed");
+    user.credits += task.credits;
+
+user.completedTasks.push(taskId);
+
+await user.save();
     ctx.reply(`✅ Task completed\n💎 +${task.credits} credits added`);
 });
 
-bot.action("home",(ctx)=> sendHome(ctx));
+bot.action("home", async(ctx)=>{
+   await sendHome(ctx);
+});
 
 // ================= ADMIN COMMANDS =================
 
@@ -326,21 +464,62 @@ bot.command("addcredit", async (ctx) => {
     const userId = String(args[1]);
     const amount = Number(args[2]);
     if(!userId || !amount) return ctx.reply("❌ Example: /addcredit userid 5");
-    if(!users[userId]) users[userId] = { credits: 0, joined: new Date().toLocaleString(), completedTasks: [] };
-    users[userId].credits += amount;
-    ctx.reply(`✅ Credits Added to ${userId}. Total: ${users[userId].credits}`);
-    try { await bot.telegram.sendMessage(userId, `🎉 ${amount} credits added! Balance: ${users[userId].credits}`); } catch(e){}
+    let user = await User.findOne({
+   userId: String(userId)
 });
 
-bot.command("addforce",(ctx)=>{
-    if(!isAdmin(ctx.from.id)) return;
-    const channel = ctx.message.text.split(" ")[1];
-    if(!channel) return ctx.reply("❌ Example: /addforce @channel");
-    if(!FORCE_CHANNELS.includes(channel)) FORCE_CHANNELS.push(channel);
-    ctx.reply(`✅ Force channel added: ${channel}`);
+if(!user){
+
+   user = await User.create({
+      userId: String(userId),
+      joined: new Date().toLocaleString()
+   });
+
+}
+
+user.credits += amount;
+
+await user.save();
+    ctx.reply(`✅ Credits Added to ${userId}. Total: ${user.credits}`);
+    try { await bot.telegram.sendMessage(userId, `🎉 ${amount} credits added! Balance: ${user.credits}`); } catch(e){}
 });
 
-bot.command("addtask",(ctx)=>{
+bot.command("addforce", async(ctx)=>{
+
+    if(!isAdmin(ctx.from.id))
+    return;
+
+    const channel =
+    ctx.message.text.split(" ")[1];
+
+    if(!channel){
+        return ctx.reply(
+            "❌ Example: /addforce @channel"
+        );
+    }
+
+    const already =
+    await ForceChannel.findOne({
+        channel
+    });
+
+    if(already){
+        return ctx.reply(
+            "❌ Already added"
+        );
+    }
+
+    await ForceChannel.create({
+        channel
+    });
+
+    ctx.reply(
+        `✅ Force channel added: ${channel}`
+    );
+
+});
+
+bot.command("addtask", async(ctx)=>{
     if(!isAdmin(ctx.from.id)) return;
     const args = ctx.message.text.split(" ");
     if(!args[1] || !args[2]) return ctx.reply("❌ Example: /addtask link 5");
