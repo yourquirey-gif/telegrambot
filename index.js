@@ -652,7 +652,7 @@ bot.action("home", async(ctx)=>{
 // ================= ADMIN COMMANDS =================
 
 bot.command("setprice",(ctx)=>{
-    if(!isAdmin(ctx.from.id)) return ctx.reply("❌ Admin only");
+    if(!(await isAdmin(ctx.from.id))) return ctx.reply("❌ Admin only");
     const amount = Number(ctx.message.text.split(" ")[1]);
     if(!amount) return ctx.reply("❌ Example: /setprice 5");
     creditSettings.pricePerCredit = amount;
@@ -660,7 +660,7 @@ bot.command("setprice",(ctx)=>{
 });
 
 bot.command("addcredit", async (ctx) => {
-    if(!isAdmin(ctx.from.id)) return ctx.reply("❌ Admin only");
+    if(!(await isAdmin(ctx.from.id))) return ctx.reply("❌ Admin only");
     const args = ctx.message.text.split(" ");
     const userId = String(args[1]);
     const amount = Number(args[2]);
