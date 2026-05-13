@@ -879,19 +879,20 @@ bot.command("addadmin", async(ctx)=>{
         );
     }
 
-    if(Number(userId) === OWNER_ID){
-        return ctx.reply(
-            "❌ Owner is already admin"
-        );
-    }
+    const already =
+    await Admin.findOne({
+        userId: String(userId)
+    });
 
-    if(ADMINS.includes(Number(userId))){
+    if(already){
         return ctx.reply(
             "❌ User already admin"
         );
     }
 
-    ADMINS.push(Number(userId));
+    await Admin.create({
+        userId: String(userId)
+    });
 
     ctx.reply(
 `✅ New admin added
@@ -927,7 +928,6 @@ You cannot remove the owner.`
 
 });
 
-
 // ================= REMOVE ADMIN =================
 
 bot.command("removeadmin", async(ctx)=>{
@@ -950,16 +950,20 @@ bot.command("removeadmin", async(ctx)=>{
         );
     }
 
-    if(!ADMINS.includes(Number(userId))){
+    const admin =
+    await Admin.findOne({
+        userId: String(userId)
+    });
+
+    if(!admin){
         return ctx.reply(
             "❌ User is not admin"
         );
     }
 
-    ADMINS =
-    ADMINS.filter(
-        id => id !== Number(userId)
-    );
+    await Admin.deleteOne({
+        userId: String(userId)
+    });
 
     ctx.reply(
 `✅ Admin removed
@@ -974,7 +978,19 @@ ${userId}`
 
             userId,
 
-`❌ Your admin access has been removed.`
+`⚠️ Admin Access Removed
+
+Your admin privileges have been removed by the owner.
+
+You are now using the bot as a normal user.
+
+❌ You no longer have access to:
+
+• Ban / Unban users
+• Add credits
+• Broadcast messages
+• Manage tasks
+• View admin statistics`
 
         );
 
