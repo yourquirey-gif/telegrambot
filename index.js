@@ -687,7 +687,7 @@ await user.save();
 
 bot.command("addforce", async(ctx)=>{
 
-    if(!isAdmin(ctx.from.id))
+    if(!(await isAdmin(ctx.from.id)))
     return;
 
     const channel =
