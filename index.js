@@ -150,8 +150,19 @@ let tasks = [];
 
 // ================= CHECK ADMIN =================
 
-function isAdmin(userId){
-    return ADMINS.includes(userId);
+async function isAdmin(userId){
+
+   if(Number(userId) === OWNER_ID){
+      return true;
+   }
+
+   const admin =
+   await Admin.findOne({
+      userId: String(userId)
+   });
+
+   return !!admin;
+
 }
 
 async function sendLog(message){
