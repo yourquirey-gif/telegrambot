@@ -372,8 +372,8 @@ bot.start(async(ctx)=>{
         let buttons =
         notJoined.map(c => [
             Markup.button.url(
-                📢 Join ${c},
-                https://t.me/${c.replace("@","")}
+    `📢 Join ${c}`,
+                `https://t.me/${c.replace("@","")}`
             )
         ]);
 
