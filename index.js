@@ -121,13 +121,14 @@ let creditSettings = {
     pricePerCredit: 5,
     minimumCredits: 10,
     contact: "@YOUR_USERNAME"
+       };
+
    const BONUS_SETTINGS = {
 
    referralBonus: 1,
 
    newUserBonus: 3
 
-};
 };
 
 // ================= USERS =================
@@ -143,7 +144,6 @@ let tasks = [];
 function isAdmin(userId){
     return ADMINS.includes(userId);
 }
-const LOG_CHANNEL = "@otpadminlogchannel";
 
 async function sendLog(message){
 
