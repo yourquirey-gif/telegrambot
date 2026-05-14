@@ -497,10 +497,12 @@ if(user.credits <= 0){
 
     // DEBUG: console.log(order); // Isse terminal mein dikhega ki 5sim kya bhej raha hai
 
-    if(!order || !order.phone){
-        return ctx.reply("❌ No numbers available or Error from API.");
+    if(!order || (!order.phone && !order.number)){
+    return ctx.reply(
+        "❌ No numbers available."
+    );
     }
-
+   
     // Kuch API response mein order.phone hota hai, kuch mein order.number
     const phoneNumber = order.phone || order.number;
     const orderId = order.id;
@@ -511,7 +513,7 @@ if(user.credits <= 0){
 ╚══════════════════════╝
 
 ✅ Service : ${service.toUpperCase()}
-📱 Number : <code>+${phoneNumber}</code>
+📱 Number : <code>+${order.phone || order.number}</code>
 🆔 Order ID : <code>${orderId}</code>
 
 ━━━━━━━━━━━━━━━━━━
