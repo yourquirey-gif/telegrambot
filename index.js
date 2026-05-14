@@ -23,7 +23,8 @@ const userSchema = new mongoose.Schema({
 
    credits: {
       type: Number,
-      default: 3
+      default: 3,
+   min: 0
    },
 
    joined: String,
@@ -813,6 +814,82 @@ bot.command("addtask", async(ctx)=>{
     tasks.push({ id: tasks.length + 1, channel: args[1], credits: Number(args[2]) });
     ctx.reply(`✅ Task Added`);
 });
+// ================= REMOVE FORCE =================
+
+bot.command("removeforce", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return ctx.reply("❌ Admin only");
+
+    const channel =
+    ctx.message.text.split(" ")[1];
+
+    if(!channel){
+        return ctx.reply(
+            "❌ Example: /removeforce @channel"
+        );
+    }
+
+    const exists =
+    await ForceChannel.findOne({
+        channel
+    });
+
+    if(!exists){
+        return ctx.reply(
+            "❌ Channel not found"
+        );
+    }
+
+    await ForceChannel.deleteOne({
+        channel
+    });
+
+    ctx.reply(
+`✅ Force channel removed:
+
+${channel}`
+    );
+
+});
+
+// ================= REMOVE TASK =================
+
+bot.command("removetask", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return ctx.reply("❌ Admin only");
+
+    const taskId =
+    Number(ctx.message.text.split(" ")[1]);
+
+    if(!taskId){
+        return ctx.reply(
+            "❌ Example: /removetask 1"
+        );
+    }
+
+    const index =
+    tasks.findIndex(
+        (t)=> t.id === taskId
+    );
+
+    if(index === -1){
+        return ctx.reply(
+            "❌ Task not found"
+        );
+    }
+
+    tasks.splice(index, 1);
+
+    ctx.reply(
+`✅ Task Removed
+
+🗑 Task ID:
+${taskId}`
+    );
+
+});
 bot.command("ban", async(ctx)=>{
 
     if(!(await isAdmin(ctx.from.id)))
@@ -1003,8 +1080,20 @@ Markup.button.callback(
 ),
 
 Markup.button.callback(
+"❌ Remove Force",
+"admin_removeforce"
+)
+],
+
+[
+Markup.button.callback(
 "🎁 Add Task",
 "admin_addtask"
+),
+
+Markup.button.callback(
+"🗑 Remove Task",
+"admin_removetask"
 )
 ],
 
@@ -1047,6 +1136,34 @@ Markup.button.callback(
 
 
 // ================= ADMIN BUTTON ACTIONS =================
+
+
+
+bot.action("admin_removeforce", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return;
+
+    ctx.reply(
+`❌ Use Command:
+
+/removeforce @channel`
+    );
+
+});
+
+bot.action("admin_removetask", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return;
+
+    ctx.reply(
+`🗑 Use Command:
+
+/removetask taskid`
+    );
+
+});
 
 bot.action("admin_stats", async(ctx)=>{
 
