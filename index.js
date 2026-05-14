@@ -534,7 +534,7 @@ if(!order.phone && !order.number){
 ╚══════════════════════╝
 
 ✅ Service : ${service.toUpperCase()}
-📱 Number : <code>+${order.phone || order.number}</code>
+📱 Number : <code>+${phoneNumber}</code>
 🆔 Order ID : <code>${orderId}</code>
 
 ━━━━━━━━━━━━━━━━━━
