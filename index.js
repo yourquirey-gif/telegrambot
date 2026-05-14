@@ -495,7 +495,7 @@ if(user.credits <= 0){
     // Aap 'india' bhi rakh sakte hain agar sirf India chahiye
     const order = await callApi(`/buy/activation/any/any/${service}`);
 
-    console.log(order); // Isse terminal mein dikhega ki 5sim kya bhej raha hai
+    console.log(JSON.stringify(order, null, 2)); // Isse terminal mein dikhega ki 5sim kya bhej raha hai
 
     if(!order || (!order.phone && !order.number)){
     return ctx.reply(
