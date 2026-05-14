@@ -494,7 +494,7 @@ if(user.credits <= 0){
     // Yahan humne URL mein 'india' ko 'any' kar diya hai aur 'any' operator rakha hai
     // Aap 'india' bhi rakh sakte hain agar sirf India chahiye
     
-   const order = await callApi(`/buy/activation/any/any/${service}`);
+   const order = await callApi(`/buy/activation/romania/virtual26/${service}`);
 
 console.log(JSON.stringify(order, null, 2));
 
