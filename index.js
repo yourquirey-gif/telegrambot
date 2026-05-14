@@ -189,22 +189,44 @@ async function sendLog(message){
 // ================= API HELPER =================
 
 async function callApi(endpoint){
+
     try{
+
         const res = await axios.get(
             `${API_URL}${endpoint}`,
             {
                 headers: {
-                    'Authorization': `Bearer ${API_KEY}`,
-                    'Accept': 'application/json'
+                    Authorization: `Bearer ${API_KEY}`,
+                    Accept: "application/json"
                 },
-                timeout: 10000 // 10 seconds timeout
+                timeout: 10000
             }
         );
+
         return res.data;
+
     }catch(err){
-        console.log("API Error:", err.response?.data || err.message);
-        return null;
+
+        console.log("=========== API ERROR ===========");
+        console.log("ENDPOINT:", endpoint);
+
+        if(err.response){
+
+            console.log("STATUS:", err.response.status);
+            console.log("DATA:", err.response.data);
+
+            return err.response.data;
+
+        }else{
+
+            console.log("MESSAGE:", err.message);
+
+            return err.message;
+
+        }
+
     }
+
 }
 
 // ================= FORCE JOIN CHECK =================
