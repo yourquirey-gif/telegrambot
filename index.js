@@ -482,7 +482,9 @@ bot.action(/buy_srv_(.+)/, async(ctx)=>{
     const user = await User.findOne({
    userId: String(userId)
 });
-
+   
+console.log(order);
+   
 if(user.credits <= 0){
    return ctx.answerCbQuery(
       "❌ No credits left",
