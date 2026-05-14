@@ -483,10 +483,14 @@ bot.action(/buy_srv_(.+)/, async(ctx)=>{
 });
 
 if(user.credits <= 0){
+
    return ctx.answerCbQuery(
-      "❌ No credits left",
-      { show_alert:true }
+      "❌ You don't have enough credits. Contact admin to buy credits.",
+      {
+         show_alert:true
+      }
    );
+
 }
 
     ctx.answerCbQuery("Allocating Number...");
@@ -532,13 +536,39 @@ bot.action(/api_otp_(.+)/, async(ctx)=>{
 
     if(data.sms && data.sms.length > 0){
         const otp = data.sms[data.sms.length - 1].code;
-        const user = await User.findOne({
+     const user = await User.findOne({
    userId: String(userId)
 });
 
-user.credits -= 1;
+// ❌ Stop if no credits
+if(user.credits <= 0){
 
-await user.save(); // Deduct only on success
+   return ctx.reply(
+`❌ YOU DON'T HAVE ENOUGH CREDITS
+
+💎 Your Balance: 0 credits
+
+📞 Please contact admin to buy credits:
+${creditSettings.contact}`,
+{
+   reply_markup:{
+      inline_keyboard:[
+         [
+            {
+               text:"🛒 Buy Credits",
+               callback_data:"buy"
+            }
+         ]
+      ]
+   }
+});
+
+}
+
+// ✅ Deduct safely
+user.credits = Math.max(0, user.credits - 1);
+
+await user.save();
 
         ctx.reply(
 `╔══════════════════════╗
