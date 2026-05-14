@@ -479,29 +479,25 @@ bot.action(/buy_srv_(.+)/, async(ctx)=>{
     const service = ctx.match[1];
     const userId = ctx.from.id;
 
-    const user = await User.findOne({
-   userId: String(userId)
-});
-
-if(user.credits <= 0){
-
-   return ctx.answerCbQuery(
-      "❌ You don't have enough credits. Contact admin to buy credits.",
-      {
-         show_alert:true
-      }
-   );
-
-}
+    if(users[userId].credits <= 0){
+        return ctx.answerCbQuery("❌ No credits left", { show_alert:true });
+    }
 
     ctx.answerCbQuery("Allocating Number...");
 
-    // Fetching number from API (India as default)
+    // Yahan humne URL mein 'india' ko 'any' kar diya hai aur 'any' operator rakha hai
+    // Aap 'india' bhi rakh sakte hain agar sirf India chahiye
     const order = await callApi(`/buy/activation/any/any/${service}`);
 
-    if(!order){
-        return ctx.reply("❌ No numbers available for this service right now. Please try again later.");
+    // DEBUG: console.log(order); // Isse terminal mein dikhega ki 5sim kya bhej raha hai
+
+    if(!order || !order.phone){
+        return ctx.reply("❌ No numbers available or Error from API.");
     }
+
+    // Kuch API response mein order.phone hota hai, kuch mein order.number
+    const phoneNumber = order.phone || order.number;
+    const orderId = order.id;
 
     ctx.reply(
 `╔══════════════════════╗
@@ -509,8 +505,8 @@ if(user.credits <= 0){
 ╚══════════════════════╝
 
 ✅ Service : ${service.toUpperCase()}
-📱 Number : <code>+${order.phone}</code>
-🆔 Order ID : ${order.id}
+📱 Number : <code>+${phoneNumber}</code>
+🆔 Order ID : <code>${orderId}</code>
 
 ━━━━━━━━━━━━━━━━━━
 Copy number and use it. 
@@ -518,11 +514,12 @@ Then tap refresh to get OTP.`,
 {
     parse_mode:"HTML",
     ...Markup.inlineKeyboard([
-        [Markup.button.callback("🔄 Check OTP / Refresh", `api_otp_${order.id}`)],
-        [Markup.button.callback("❌ Cancel Order", `cancel_${order.id}`)]
+        [Markup.button.callback("🔄 Check OTP / Refresh", `api_otp_${orderId}`)],
+        [Markup.button.callback("❌ Cancel Order", `cancel_${orderId}`)]
     ])
 });
 });
+
 
 // ================= CHECK OTP (OTP Fetch) =================
 
