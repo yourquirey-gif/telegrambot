@@ -479,10 +479,16 @@ bot.action(/buy_srv_(.+)/, async(ctx)=>{
     const service = ctx.match[1];
     const userId = ctx.from.id;
 
-    if(users[userId].credits <= 0){
-        return ctx.answerCbQuery("❌ No credits left", { show_alert:true });
-    }
+    const user = await User.findOne({
+   userId: String(userId)
+});
 
+if(user.credits <= 0){
+   return ctx.answerCbQuery(
+      "❌ No credits left",
+      { show_alert:true }
+   );
+}
     ctx.answerCbQuery("Allocating Number...");
 
     // Yahan humne URL mein 'india' ko 'any' kar diya hai aur 'any' operator rakha hai
