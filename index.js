@@ -497,11 +497,21 @@ if(user.credits <= 0){
 
     console.log(JSON.stringify(order, null, 2)); // Isse terminal mein dikhega ki 5sim kya bhej raha hai
 
-    if(!order || (!order.phone && !order.number)){
+    if(!order){
+
     return ctx.reply(
-        "❌ No numbers available."
+        "❌ API returned null"
     );
-    }
+
+}
+
+ctx.reply(
+`DEBUG DATA:
+
+<code>${JSON.stringify(order, null, 2)}</code>`,
+{
+    parse_mode:"HTML"
+});
    
     // Kuch API response mein order.phone hota hai, kuch mein order.number
     const phoneNumber = order.phone || order.number;
