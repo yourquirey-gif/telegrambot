@@ -493,11 +493,13 @@ if(user.credits <= 0){
 
     // Yahan humne URL mein 'india' ko 'any' kar diya hai aur 'any' operator rakha hai
     // Aap 'india' bhi rakh sakte hain agar sirf India chahiye
-    const order = await callApi(`/buy/activation/any/any/${service}`);
+    
+   const order = await callApi(`/buy/activation/any/any/${service}`);
 
-    console.log(JSON.stringify(order, null, 2)); // Isse terminal mein dikhega ki 5sim kya bhej raha hai
+console.log(JSON.stringify(order, null, 2));
 
-    if(!order){
+// ❌ Agar API null bheje
+if(!order){
 
     return ctx.reply(
         "❌ API returned null"
@@ -505,14 +507,23 @@ if(user.credits <= 0){
 
 }
 
-ctx.reply(
-`DEBUG DATA:
+// ❌ Agar API object nahi bheje
+if(typeof order !== "object"){
 
-<code>${JSON.stringify(order, null, 2)}</code>`,
-{
-    parse_mode:"HTML"
-});
-   
+    return ctx.reply(
+        `❌ No numbers available.\n\nAPI Response:\n${order}`
+    );
+
+}
+
+// ❌ Agar phone field missing ho
+if(!order.phone && !order.number){
+
+    return ctx.reply(
+        "❌ Number field missing from API."
+    );
+
+}
     // Kuch API response mein order.phone hota hai, kuch mein order.number
     const phoneNumber = order.phone || order.number;
     const orderId = order.id;
