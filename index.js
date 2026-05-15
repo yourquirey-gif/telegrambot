@@ -480,7 +480,7 @@ bot.action(/buy_srv_(.+)/, async (ctx) => {
     ctx.answerCbQuery("Allocating Number...");
 
     // Yahan 'ar' ka matlab Argentina hai (sasta number)
-    const data = await callVakApi('getNumber', { service: service, country: 'ar' });
+    const data = await callVakApi('getNumber', { service: service, country: 'ao' });
 
     if (data && data.tel) {
         const phoneNumber = data.tel;
