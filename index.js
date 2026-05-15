@@ -626,8 +626,8 @@ bot.action(/op_(.+)_(.+)_(.+)/, async(ctx)=>{
 
     const order =
     await callApi(
-`/buy/activation/${country}/${operator}/${service}`
-    );
+`/user/buy/activation/${country}/${operator}/${service}`
+);
 
     console.log(order);
 
