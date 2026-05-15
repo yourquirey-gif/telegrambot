@@ -190,46 +190,19 @@ async function sendLog(message){
 
 // ================= API HELPER =================
 
-async function callApi(endpoint){
-
-    try{
-
-        const res = await axios.get(
-            `${API_URL}${endpoint}`,
-            {
-                headers: {
-                    Authorization: `Bearer ${API_KEY}`,
-                    Accept: "application/json"
-                },
-                timeout: 10000
-            }
-        );
-
+async function callVakApi(endpoint, params = {}) {
+    try {
+        const res = await axios.get(`${VAK_BASE_URL}/${endpoint}/`, {
+            params: { apiKey: VAK_API_KEY, ...params },
+            timeout: 10000
+        });
         return res.data;
-
-    }catch(err){
-
-        console.log("=========== API ERROR ===========");
-        console.log("ENDPOINT:", endpoint);
-
-        if(err.response){
-
-            console.log("STATUS:", err.response.status);
-            console.log("DATA:", err.response.data);
-
-            return err.response.data;
-
-        }else{
-
-            console.log("MESSAGE:", err.message);
-
-            return err.message;
-
-        }
-
+    } catch (err) {
+        console.log("VAK-API Error:", err.message);
+        return null;
     }
-
 }
+
 
 // ================= FORCE JOIN CHECK =================
 
