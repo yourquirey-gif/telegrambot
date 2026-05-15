@@ -557,8 +557,10 @@ bot.action(/country_(.+)_(.+)/, async(ctx)=>{
 
     const products =
     await callApi(
-        `/guest/products/${country}/${service}`
+        `/guest/products/${country}/any`
     );
+
+    console.log(products);
 
     if(!products || typeof products !== "object"){
 
@@ -568,10 +570,35 @@ bot.action(/country_(.+)_(.+)/, async(ctx)=>{
 
     }
 
+    let operators = [];
+
+    Object.keys(products).forEach((operator)=>{
+
+        const services = products[operator];
+
+        if(
+            services &&
+            services[service]
+        ){
+
+            operators.push(operator);
+
+        }
+
+    });
+
+    if(operators.length === 0){
+
+        return ctx.reply(
+            `❌ No operators available for ${service}`
+        );
+
+    }
+
     let buttons = [];
 
-    Object.keys(products)
-    .slice(0, 30)
+    operators
+    .slice(0, 50)
     .forEach((operator)=>{
 
         buttons.push([
@@ -600,7 +627,6 @@ Markup.inlineKeyboard(buttons)
     );
 
 });
-
 // ================= BUY NUMBER =================
 
 bot.action(/op_(.+)_(.+)_(.+)/, async(ctx)=>{
