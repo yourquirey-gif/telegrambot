@@ -497,58 +497,135 @@ Markup.inlineKeyboard(buttons));
 
 // ================= BUY NUMBER (Number Fetch) =================
 
+// ================= SELECT COUNTRY =================
+
 bot.action(/buy_srv_(.+)/, async(ctx)=>{
+
     const service = ctx.match[1];
-    const userId = ctx.from.id;
+
+    ctx.reply(
+`🌍 SELECT COUNTRY
+
+Choose country for ${service.toUpperCase()}`,
+Markup.inlineKeyboard([
+
+[
+Markup.button.callback("🇷🇴 Romania", `country_${service}_romania`)
+],
+
+[
+Markup.button.callback("🇮🇩 Indonesia", `country_${service}_indonesia`)
+],
+
+[
+Markup.button.callback("🇬🇧 United Kingdom", `country_${service}_england`)
+],
+
+[
+Markup.button.callback("🇮🇳 India", `country_${service}_india`)
+]
+
+])
+);
+
+});
+
+// ================= SELECT OPERATOR =================
+
+bot.action(/country_(.+)_(.+)/, async(ctx)=>{
+
+    const service = ctx.match[1];
+    const country = ctx.match[2];
+
+    ctx.reply(
+`📡 SELECT OPERATOR
+
+Country: ${country.toUpperCase()}`,
+Markup.inlineKeyboard([
+
+[
+Markup.button.callback(
+"⚡ Any Operator",
+`op_${service}_${country}_any`
+)
+],
+
+[
+Markup.button.callback(
+"📱 Virtual26",
+`op_${service}_${country}_virtual26`
+)
+]
+
+])
+);
+
+});
+
+// ================= BUY NUMBER =================
+
+bot.action(/op_(.+)_(.+)_(.+)/, async(ctx)=>{
+
+    const service = ctx.match[1];
+    const country = ctx.match[2];
+    const operator = ctx.match[3];
 
     const user = await User.findOne({
-   userId: String(userId)
-});
-   
-if(user.credits <= 0){
-   return ctx.answerCbQuery(
-      "❌ No credits left",
-      { show_alert:true }
-   );
-}
+        userId: String(ctx.from.id)
+    });
+
+    if(user.credits <= 0){
+
+        return ctx.reply(
+            "❌ No credits left"
+        );
+
+    }
+
     ctx.answerCbQuery("Allocating Number...");
 
-    // Yahan humne URL mein 'india' ko 'any' kar diya hai aur 'any' operator rakha hai
-    // Aap 'india' bhi rakh sakte hain agar sirf India chahiye
-    
-   const order = await callApi(`/buy/activation/romania/virtual26/${service}`);
-
-console.log(JSON.stringify(order, null, 2));
-
-// ❌ Agar API null bheje
-if(!order){
-
-    return ctx.reply(
-        "❌ API returned null"
+    const order =
+    await callApi(
+`/buy/activation/${country}/${operator}/${service}`
     );
 
-}
+    console.log(order);
 
-// ❌ Agar API object nahi bheje
-if(typeof order !== "object"){
+    // ❌ API NULL
+    if(!order){
 
-    return ctx.reply(
-        `❌ No numbers available.\n\nAPI Response:\n${order}`
-    );
+        return ctx.reply(
+            "❌ API returned null"
+        );
 
-}
+    }
 
-// ❌ Agar phone field missing ho
-if(!order.phone && !order.number){
+    // ❌ STRING ERROR
+    if(typeof order !== "object"){
 
-    return ctx.reply(
-        "❌ Number field missing from API."
-    );
+        return ctx.reply(
+`❌ No numbers available
 
-}
-    // Kuch API response mein order.phone hota hai, kuch mein order.number
-    const phoneNumber = order.phone || order.number;
-    const orderId = order.id;
+API:
+${order}`
+        );
+
+    }
+
+    // ❌ NO PHONE
+    if(!order.phone && !order.number){
+
+        return ctx.reply(
+            "❌ Number field missing"
+        );
+
+    }
+
+    const phoneNumber =
+    order.phone || order.number;
+
+    const orderId =
+    order.id;
 
     ctx.reply(
 `╔══════════════════════╗
@@ -556,21 +633,40 @@ if(!order.phone && !order.number){
 ╚══════════════════════╝
 
 ✅ Service : ${service.toUpperCase()}
-📱 Number : <code>+${phoneNumber}</code>
-🆔 Order ID : <code>${orderId}</code>
+🌍 Country : ${country}
+📡 Operator : ${operator}
+
+📱 Number :
+<code>+${phoneNumber}</code>
+
+🆔 Order ID :
+<code>${orderId}</code>
 
 ━━━━━━━━━━━━━━━━━━
-Copy number and use it. 
-Then tap refresh to get OTP.`,
+
+Copy number and use it.`,
 {
     parse_mode:"HTML",
     ...Markup.inlineKeyboard([
-        [Markup.button.callback("🔄 Check OTP / Refresh", `api_otp_${orderId}`)],
-        [Markup.button.callback("❌ Cancel Order", `cancel_${orderId}`)]
-    ])
-});
+
+[
+Markup.button.callback(
+"🔄 Check OTP",
+`api_otp_${orderId}`
+)
+],
+
+[
+Markup.button.callback(
+"❌ Cancel Order",
+`cancel_${orderId}`
+)
+]
+
+])
 });
 
+});
 
 // ================= CHECK OTP (OTP Fetch) =================
 
