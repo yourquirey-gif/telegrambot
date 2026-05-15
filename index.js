@@ -106,12 +106,13 @@ const VAK_BASE_URL = "https://vak-sms.com/api";
 // ================= SERVICES =================
 
 const SERVICES = {
-    "Telegram": "telegram",
-    "WhatsApp": "whatsapp",
-    "Instagram": "instagram",
+    "Telegram": "tg",
+    "WhatsApp": "wa",
+    "Instagram": "ig",
     "Google/Gmail": "go",
-    "Facebook": "facebook"
+    "Facebook": "fb"
 };
+
 
 // ================= OWNER =================
 
