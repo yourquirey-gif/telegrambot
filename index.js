@@ -519,7 +519,7 @@ bot.action(/buy_srv_(.+)/, async(ctx)=>{
     let buttons = [];
 
     Object.keys(countries)
-    .slice(0, 30)
+    
     .forEach((country)=>{
 
         buttons.push([
