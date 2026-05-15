@@ -99,8 +99,9 @@ async function loadDefaultForce(){
 
 // ================= API CONFIG =================
 
-const API_KEY = "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MTAwNDkxNzksImlhdCI6MTc3ODUxMzE3OSwicmF5IjoiMjJiYjcyYTFiZWNkMjc0NTg1ZTk0MmY3MzBiZTQ3YTYiLCJzdWIiOjQwNTMwMzB9.NST5q_dk1f10pCodBRSMpp86TSSOyacUiCjceTrEC1pfTKv6MFI5e7FDoIM0ePh9As1Cbppa7rhSaEYz8gRVrW5S4UR6YIf6626OH-P7ttfJJ9doySkK4dW9zYYqvqgfHwPJmD-Thp1tssGctAznOjthywgR8dqRxxIp7xSuJ7aumBPgDr9CcfPFjQyEinZTyi98f6GMiFK4qoEoxh0j5zsBcM0HXXahHHAJ3bL88brZngso1tN7aGXBU5DDwEucNuAnEgLoiFiE76V0bdxeRNxJpml-z50dStdyq6_v2YfLxWm8_-PAUYLWXhsMtKqHT5P9We-uo_yo7ie-xFQdYw";
-const API_URL = "https://5sim.net/v1";
+const VAK_API_KEY = "e2ca8fcf76b64021a033b4ff76ca037e"; 
+const VAK_BASE_URL = "https://vak-sms.com/api";
+
 
 // ================= SERVICES =================
 
