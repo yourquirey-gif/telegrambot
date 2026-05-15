@@ -497,68 +497,107 @@ Markup.inlineKeyboard(buttons));
 
 // ================= BUY NUMBER (Number Fetch) =================
 
-// ================= SELECT COUNTRY =================
+// ================= COUNTRY FETCH =================
 
 bot.action(/buy_srv_(.+)/, async(ctx)=>{
 
     const service = ctx.match[1];
 
+    ctx.answerCbQuery("Loading countries...");
+
+    const countries =
+    await callApi(`/guest/countries`);
+
+    if(!countries || typeof countries !== "object"){
+
+        return ctx.reply(
+            "❌ Failed to load countries"
+        );
+
+    }
+
+    let buttons = [];
+
+    Object.keys(countries)
+    .slice(0, 30)
+    .forEach((country)=>{
+
+        buttons.push([
+
+            Markup.button.callback(
+                country.toUpperCase(),
+                `country_${service}_${country}`
+            )
+
+        ]);
+
+    });
+
     ctx.reply(
+
 `🌍 SELECT COUNTRY
 
-Choose country for ${service.toUpperCase()}`,
-Markup.inlineKeyboard([
+Choose country for:
+${service.toUpperCase()}`,
 
-[
-Markup.button.callback("🇷🇴 Romania", `country_${service}_romania`)
-],
+Markup.inlineKeyboard(buttons)
 
-[
-Markup.button.callback("🇮🇩 Indonesia", `country_${service}_indonesia`)
-],
-
-[
-Markup.button.callback("🇬🇧 United Kingdom", `country_${service}_england`)
-],
-
-[
-Markup.button.callback("🇮🇳 India", `country_${service}_india`)
-]
-
-])
-);
+    );
 
 });
 
-// ================= SELECT OPERATOR =================
+// ================= OPERATOR FETCH =================
 
 bot.action(/country_(.+)_(.+)/, async(ctx)=>{
 
     const service = ctx.match[1];
     const country = ctx.match[2];
 
+    ctx.answerCbQuery("Loading operators...");
+
+    const products =
+    await callApi(
+        `/guest/products/${country}/${service}`
+    );
+
+    if(!products || typeof products !== "object"){
+
+        return ctx.reply(
+            "❌ Failed to load operators"
+        );
+
+    }
+
+    let buttons = [];
+
+    Object.keys(products)
+    .slice(0, 30)
+    .forEach((operator)=>{
+
+        buttons.push([
+
+            Markup.button.callback(
+                operator,
+                `op_${service}_${country}_${operator}`
+            )
+
+        ]);
+
+    });
+
     ctx.reply(
+
 `📡 SELECT OPERATOR
 
-Country: ${country.toUpperCase()}`,
-Markup.inlineKeyboard([
+🌍 Country:
+${country.toUpperCase()}
 
-[
-Markup.button.callback(
-"⚡ Any Operator",
-`op_${service}_${country}_any`
-)
-],
+📱 Service:
+${service.toUpperCase()}`,
 
-[
-Markup.button.callback(
-"📱 Virtual26",
-`op_${service}_${country}_virtual26`
-)
-]
+Markup.inlineKeyboard(buttons)
 
-])
-);
+    );
 
 });
 
@@ -570,7 +609,8 @@ bot.action(/op_(.+)_(.+)_(.+)/, async(ctx)=>{
     const country = ctx.match[2];
     const operator = ctx.match[3];
 
-    const user = await User.findOne({
+    const user =
+    await User.findOne({
         userId: String(ctx.from.id)
     });
 
@@ -591,7 +631,6 @@ bot.action(/op_(.+)_(.+)_(.+)/, async(ctx)=>{
 
     console.log(order);
 
-    // ❌ API NULL
     if(!order){
 
         return ctx.reply(
@@ -600,7 +639,6 @@ bot.action(/op_(.+)_(.+)_(.+)/, async(ctx)=>{
 
     }
 
-    // ❌ STRING ERROR
     if(typeof order !== "object"){
 
         return ctx.reply(
@@ -612,7 +650,6 @@ ${order}`
 
     }
 
-    // ❌ NO PHONE
     if(!order.phone && !order.number){
 
         return ctx.reply(
@@ -628,13 +665,19 @@ ${order}`
     order.id;
 
     ctx.reply(
+
 `╔══════════════════════╗
  📱 NUMBER ALLOCATED
 ╚══════════════════════╝
 
-✅ Service : ${service.toUpperCase()}
-🌍 Country : ${country}
-📡 Operator : ${operator}
+🌍 Country :
+${country}
+
+📡 Operator :
+${operator}
+
+✅ Service :
+${service.toUpperCase()}
 
 📱 Number :
 <code>+${phoneNumber}</code>
@@ -643,10 +686,11 @@ ${order}`
 <code>${orderId}</code>
 
 ━━━━━━━━━━━━━━━━━━
-
 Copy number and use it.`,
+
 {
     parse_mode:"HTML",
+
     ...Markup.inlineKeyboard([
 
 [
@@ -664,10 +708,10 @@ Markup.button.callback(
 ]
 
 ])
-});
 
 });
 
+});
 // ================= CHECK OTP (OTP Fetch) =================
 
 bot.action(/api_otp_(.+)/, async(ctx)=>{
