@@ -470,318 +470,80 @@ Select a category to get a number
 Markup.inlineKeyboard(buttons));
 });
 
-// ================= BUY NUMBER (Number Fetch) =================
-
-// ================= COUNTRY FETCH =================
-
-bot.action(/buy_srv_(.+)/, async(ctx)=>{
-
-    const service = ctx.match[1];
-
-    ctx.answerCbQuery("Loading countries...");
-
-    const countries =
-    await callApi(`/guest/countries`);
-
-    if(!countries || typeof countries !== "object"){
-
-        return ctx.reply(
-            "❌ Failed to load countries"
-        );
-
-    }
-
-    let buttons = [];
-
-    Object.keys(countries)
-    
-    .forEach((country)=>{
-
-        buttons.push([
-
-            Markup.button.callback(
-                country.toUpperCase(),
-                `country_${service}_${country}`
-            )
-
-        ]);
-
-    });
-
-    ctx.reply(
-
-`🌍 SELECT COUNTRY
-
-Choose country for:
-${service.toUpperCase()}`,
-
-Markup.inlineKeyboard(buttons)
-
-    );
-
-});
-
-// ================= OPERATOR FETCH =================
-
-bot.action(/country_(.+)_(.+)/, async(ctx)=>{
-
-    const service = ctx.match[1];
-    const country = ctx.match[2];
-
-    ctx.answerCbQuery("Loading operators...");
-
-    const products =
-    await callApi(
-        `/guest/products/${country}/any`
-    );
-
-    console.log(products);
-
-    if(!products || typeof products !== "object"){
-
-        return ctx.reply(
-            "❌ Failed to load operators"
-        );
-
-    }
-
-    let operators = [];
-
-    Object.keys(products).forEach((operator)=>{
-
-        const services = products[operator];
-
-        if(
-            services &&
-            services[service]
-        ){
-
-            operators.push(operator);
-
-        }
-
-    });
-
-    if(operators.length === 0){
-
-        return ctx.reply(
-            `❌ No operators available for ${service}`
-        );
-
-    }
-
-    let buttons = [];
-
-    operators
-    .slice(0, 50)
-    .forEach((operator)=>{
-
-        buttons.push([
-
-            Markup.button.callback(
-                operator,
-                `op_${service}_${country}_${operator}`
-            )
-
-        ]);
-
-    });
-
-    ctx.reply(
-
-`📡 SELECT OPERATOR
-
-🌍 Country:
-${country.toUpperCase()}
-
-📱 Service:
-${service.toUpperCase()}`,
-
-Markup.inlineKeyboard(buttons)
-
-    );
-
-});
 // ================= BUY NUMBER =================
-
-bot.action(/op_(.+)_(.+)_(.+)/, async(ctx)=>{
-
+bot.action(/buy_srv_(.+)/, async (ctx) => {
     const service = ctx.match[1];
-    const country = ctx.match[2];
-    const operator = ctx.match[3];
+    const user = await User.findOne({ userId: String(ctx.from.id) });
 
-    const user =
-    await User.findOne({
-        userId: String(ctx.from.id)
-    });
-
-    if(user.credits <= 0){
-
-        return ctx.reply(
-            "❌ No credits left"
-        );
-
-    }
+    if (user.credits <= 0) return ctx.answerCbQuery("❌ No credits left", { show_alert: true });
 
     ctx.answerCbQuery("Allocating Number...");
 
-    const order =
-    await callApi(
-`/user/buy/activation/${country}/${operator}/${service}`
-);
+    // Yahan 'ar' ka matlab Argentina hai (sasta number)
+    const data = await callVakApi('getNumber', { service: service, country: 'ar' });
 
-    console.log(order);
+    if (data && data.tel) {
+        const phoneNumber = data.tel;
+        const orderId = data.id;
 
-    if(!order){
-
-        return ctx.reply(
-            "❌ API returned null"
-        );
-
+        ctx.reply(`📱 NUMBER ALLOCATED\n\n✅ Service: ${service.toUpperCase()}\n📱 Number: <code>+${phoneNumber}</code>\n🆔 ID: ${orderId}`, {
+            parse_mode: "HTML",
+            ...Markup.inlineKeyboard([
+                [Markup.button.callback("🔄 Check OTP", `api_otp_${orderId}_${service}`)],
+                [Markup.button.callback("❌ Cancel", `cancel_${orderId}`)]
+            ])
+        });
+    } else {
+        ctx.reply("❌ No numbers available. Try again.");
     }
-
-    if(typeof order !== "object"){
-
-        return ctx.reply(
-`❌ No numbers available
-
-API:
-${order}`
-        );
-
-    }
-
-    if(!order.phone && !order.number){
-
-        return ctx.reply(
-            "❌ Number field missing"
-        );
-
-    }
-
-    const phoneNumber =
-    order.phone || order.number;
-
-    const orderId =
-    order.id;
-
-    ctx.reply(
-
-`╔══════════════════════╗
- 📱 NUMBER ALLOCATED
-╚══════════════════════╝
-
-🌍 Country :
-${country}
-
-📡 Operator :
-${operator}
-
-✅ Service :
-${service.toUpperCase()}
-
-📱 Number :
-<code>+${phoneNumber}</code>
-
-🆔 Order ID :
-<code>${orderId}</code>
-
-━━━━━━━━━━━━━━━━━━
-Copy number and use it.`,
-
-{
-    parse_mode:"HTML",
-
-    ...Markup.inlineKeyboard([
-
-[
-Markup.button.callback(
-"🔄 Check OTP",
-`api_otp_${orderId}`
-)
-],
-
-[
-Markup.button.callback(
-"❌ Cancel Order",
-`cancel_${orderId}`
-)
-]
-
-])
-
 });
 
-});
-// ================= CHECK OTP (OTP Fetch) =================
 
-bot.action(/api_otp_(.+)/, async(ctx)=>{
+// =================OTP Fetch =================
+
+bot.action(/api_otp_(.+)_(.+)/, async (ctx) => {
     const orderId = ctx.match[1];
+    const service = ctx.match[2];
     const userId = ctx.from.id;
 
-    ctx.answerCbQuery("Checking SMS...");
-    const data = await callApi(`/check/${orderId}`);
+    const user = await User.findOne({ userId: String(userId) });
 
-    if(!data) return ctx.reply("❌ Order not found or expired.");
-
-    if(data.sms && data.sms.length > 0){
-        const otp = data.sms[data.sms.length - 1].code;
-     const user = await User.findOne({
-   userId: String(userId)
-});
-
-// ❌ Stop if no credits
-if(user.credits <= 0){
-
-   return ctx.reply(
-`❌ YOU DON'T HAVE ENOUGH CREDITS
-
-💎 Your Balance: 0 credits
-
-📞 Please contact admin to buy credits:
-${creditSettings.contact}`,
-{
-   reply_markup:{
-      inline_keyboard:[
-         [
+    // --- Line 519-545 ka logic yahan hai ---
+    if (!user || user.credits <= 0) {
+        return ctx.reply(
+            `❌ YOU DON'T HAVE ENOUGH CREDITS\n\n💎 Your Balance: 0 credits\n\n📞 Please contact admin to buy credits:\n${creditSettings.contact}`,
             {
-               text:"🛒 Buy Credits",
-               callback_data:"buy"
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: "🛒 Buy Credits", callback_data: "buy" }]
+                    ]
+                }
             }
-         ]
-      ]
-   }
-});
+        );
+    }
+    // ---------------------------------------
 
-}
+    ctx.answerCbQuery("Checking SMS...");
+    const data = await callVakApi('getSmsCode', { id: orderId });
 
-// ✅ Deduct safely
-user.credits = Math.max(0, user.credits - 1);
-
-await user.save();
+    if (data && data.smsCode) {
+        // Deduct safely and save
+        user.credits = Math.max(0, user.credits - 1);
+        await user.save();
 
         ctx.reply(
-`╔══════════════════════╗
- 📩 NEW OTP RECEIVED
-╚══════════════════════╝
-
-📱 Number : +${data.phone}
-🔐 OTP : <code>${otp}</code>
-
-💎 -1 Credit Deducted
-💰 Remaining : ${user.credits} credits`,
-{ parse_mode:"HTML" });
+            `╔══════════════════════╗\n 📩 NEW OTP RECEIVED\n╚══════════════════════╝\n\n🔐 OTP : <code>${data.smsCode}</code>\n\n💎 -1 Credit Deducted\n💰 Remaining : ${user.credits} credits`, 
+            { parse_mode: "HTML" }
+        );
     } else {
         ctx.reply(
-`╔══════════════════════╗
- ⚠️ NO NEW OTP
-╚══════════════════════╝
-
-Status: ${data.status}
-Try again after few seconds`,
-Markup.inlineKeyboard([[Markup.button.callback("🔄 Refresh Again", `api_otp_${orderId}`)]]));
+            "⚠️ No OTP yet. Refreshing...", 
+            Markup.inlineKeyboard([[Markup.button.callback("🔄 Refresh", `api_otp_${orderId}_${service}`)]])
+        );
     }
 });
+
+
 
 // ================= CANCEL ORDER =================
 
