@@ -513,13 +513,14 @@ bot.action(/buy_srv_(.+)/, async (ctx) => {
 // =================OTP Fetch =================
 
 bot.action(/api_otp_(.+)_(.+)/, async (ctx) => {
+bot.action(/api_otp_(.+)_(.+)/, async (ctx) => {
     const orderId = ctx.match[1];
     const service = ctx.match[2];
     const userId = ctx.from.id;
 
     const user = await User.findOne({ userId: String(userId) });
 
-    // --- Line 519-545 ka logic yahan hai ---
+    // --- Line 522 se 534 ka aapka original credit-check code ---
     if (!user || user.credits <= 0) {
         return ctx.reply(
             `❌ YOU DON'T HAVE ENOUGH CREDITS\n\n💎 Your Balance: 0 credits\n\n📞 Please contact admin to buy credits:\n${creditSettings.contact}`,
@@ -532,27 +533,27 @@ bot.action(/api_otp_(.+)_(.+)/, async (ctx) => {
             }
         );
     }
-    // ---------------------------------------
+    // -----------------------------------------------------------
 
     ctx.answerCbQuery("Checking SMS...");
-    const data = await callVakApi('getSmsCode', { id: orderId });
+    
+    // Naye document ke mutabik standard check
+    const responseData = await callVakApi('getStatus', { id: orderId });
 
-    if (data && data.smsCode) {
-        // Deduct safely and save
+    if (responseData && typeof responseData === 'string' && responseData.includes('STATUS_OK')) {
+        const smsCode = responseData.split(':')[1]; // STATUS_OK:12345 se OTP nikalega
+
         user.credits = Math.max(0, user.credits - 1);
         await user.save();
 
-        ctx.reply(
-            `╔══════════════════════╗\n 📩 NEW OTP RECEIVED\n╚══════════════════════╝\n\n🔐 OTP : <code>${data.smsCode}</code>\n\n💎 -1 Credit Deducted\n💰 Remaining : ${user.credits} credits`, 
-            { parse_mode: "HTML" }
-        );
+        ctx.reply(`╔══════════════════════╗\n 📩 NEW OTP RECEIVED\n╚══════════════════════╝\n\n🔐 OTP : <code>${smsCode}</code>\n\n💎 -1 Credit Deducted\n💰 Remaining : ${user.credits} credits`, { parse_mode: "HTML" });
+    } else if (responseData === 'STATUS_WAIT_CODE') {
+        ctx.reply("⚠️ No OTP yet. Status: Waiting for SMS...", Markup.inlineKeyboard([[Markup.button.callback("🔄 Refresh Again", `api_otp_${orderId}_${service}`)]]));
     } else {
-        ctx.reply(
-            "⚠️ No OTP yet. Refreshing...", 
-            Markup.inlineKeyboard([[Markup.button.callback("🔄 Refresh", `api_otp_${orderId}_${service}`)]])
-        );
+        ctx.reply("⚠️ No OTP received yet or session expired. Try refreshing in a bit.", Markup.inlineKeyboard([[Markup.button.callback("🔄 Refresh", `api_otp_${orderId}_${service}`)]]));
     }
 });
+
 
 
 
