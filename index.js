@@ -476,30 +476,27 @@ Select a category to get a number
 Markup.inlineKeyboard(buttons));
 });
 
-// ================= BUY NUMBER =================
+// ================= BUY NUMBER (ONLY DR CONGO - FIXED) =================
 bot.action(/buy_srv_(.+)/, async (ctx) => {
-    let service = ctx.match[1]; // const ki jagah let kiya
+    let service = ctx.match[1];
     const user = await User.findOne({ userId: String(ctx.from.id) });
 
     if (user.credits <= 0) return ctx.answerCbQuery("❌ No credits left", { show_alert: true });
 
     ctx.answerCbQuery("Allocating DR Congo Number...");
-
-    // Service code ko safe side lowercase kar diya
     service = service.toLowerCase();
 
-    // VAK-SMS Standard API ke parameters: action=getNumber, service, country (cd = dr congo)
+    // Direct DR Congo ('cd') par request bhej rahe hain
     const responseData = await callVakApi('getNumber', { service: service, country: 'cd' });
+    
+    console.log("VAK-SMS API Raw Response:", responseData); // Ye logs mein dikhega debug karne ke liye
 
-    console.log("VAK-SMS Raw Response:", responseData); // Server logs mein check karne ke liye
-
-    // Response check: standard API 'ACCESS_NUMBER:ID:NUMBER' bhejti hai
     if (responseData && typeof responseData === 'string' && responseData.includes('ACCESS_NUMBER')) {
         const parts = responseData.split(':'); 
         const orderId = parts[1];
         const phoneNumber = parts[2];
 
-        ctx.reply(`╔══════════════════════╗\n 📱 NUMBER ALLOCATED\n╚══════════════════════╝\n\n✅ Service : ${service.toUpperCase()}\n📱 Number : <code>+${phoneNumber}</code>\n🆔 Order ID : <code>${orderId}</code>\n\n━━━━━━━━━━━━━━━━━━\nCopy number and use it.\nThen tap refresh to get OTP.`, {
+        ctx.reply(`╔══════════════════════╗\n 📱 DR CONGO NUMBER ALLOCATED\n╚══════════════════════╝\n\n✅ Service : ${service.toUpperCase()}\n📱 Number : <code>+${phoneNumber}</code>\n🆔 Order ID : <code>${orderId}</code>\n\n━━━━━━━━━━━━━━━━━━\nCopy number and use it.\nThen tap refresh to get OTP.`, {
             parse_mode: "HTML",
             ...Markup.inlineKeyboard([
                 [Markup.button.callback("🔄 Check OTP / Refresh", `api_otp_${orderId}_${service}`)],
@@ -507,14 +504,18 @@ bot.action(/buy_srv_(.+)/, async (ctx) => {
             ])
         });
     } else {
-        // Agar stock khatam ya koi aur error ho
-        if (responseData && responseData.includes('NO_NUMBERS')) {
-            ctx.reply("❌ DR Congo mein abhi is service ke numbers khatam hain. Thodi der baad try karein.");
+        // Alag-alag errors ke liye sahi pehchan
+        if (responseData && typeof responseData === 'string' && responseData.includes('NO_BALANCE')) {
+            ctx.reply("❌ API Wallet mein balance nahi hai ya API Key galat hai!");
+        } else if (responseData && typeof responseData === 'string' && responseData.includes('NO_NUMBER')) {
+            ctx.reply("❌ DR Congo mein abhi is service ke saare numbers saste hone ki wajah se bik chuke hain. Kripya 2-5 minute baad dobara try karein.");
         } else {
-            ctx.reply("❌ Sorry, no numbers available. Try again later.");
+            // Agar koi aur error ya unknown response aaye
+            ctx.reply("❌ DR Congo Stock Empty! Thodi der baad try karein (Try again later).");
         }
     }
 });
+
 
 
 
