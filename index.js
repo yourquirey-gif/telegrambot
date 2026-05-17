@@ -478,19 +478,24 @@ Markup.inlineKeyboard(buttons));
 
 // ================= BUY NUMBER =================
 bot.action(/buy_srv_(.+)/, async (ctx) => {
-    const service = ctx.match[1];
+    let service = ctx.match[1]; // const ki jagah let kiya
     const user = await User.findOne({ userId: String(ctx.from.id) });
 
     if (user.credits <= 0) return ctx.answerCbQuery("❌ No credits left", { show_alert: true });
 
     ctx.answerCbQuery("Allocating DR Congo Number...");
 
+    // Service code ko safe side lowercase kar diya
+    service = service.toLowerCase();
+
     // VAK-SMS Standard API ke parameters: action=getNumber, service, country (cd = dr congo)
     const responseData = await callVakApi('getNumber', { service: service, country: 'cd' });
 
+    console.log("VAK-SMS Raw Response:", responseData); // Server logs mein check karne ke liye
+
     // Response check: standard API 'ACCESS_NUMBER:ID:NUMBER' bhejti hai
     if (responseData && typeof responseData === 'string' && responseData.includes('ACCESS_NUMBER')) {
-        const parts = responseData.split(':'); // Split karke ID aur Number nikalenge
+        const parts = responseData.split(':'); 
         const orderId = parts[1];
         const phoneNumber = parts[2];
 
@@ -502,11 +507,15 @@ bot.action(/buy_srv_(.+)/, async (ctx) => {
             ])
         });
     } else {
-        // Agar response mein koi error message (jaise NO_NUMBERS, NO_BALANCE) aaya toh log hoga
-        console.log("API Response Error:", responseData);
-        ctx.reply("❌ Sorry, no numbers available. Try again later.");
+        // Agar stock khatam ya koi aur error ho
+        if (responseData && responseData.includes('NO_NUMBERS')) {
+            ctx.reply("❌ DR Congo mein abhi is service ke numbers khatam hain. Thodi der baad try karein.");
+        } else {
+            ctx.reply("❌ Sorry, no numbers available. Try again later.");
+        }
     }
 });
+
 
 
 
@@ -556,15 +565,23 @@ bot.action(/api_otp_(.+)_(.+)/, async (ctx) => {
 
 
 
-// ================= CANCEL ORDER =================
-
+// ================= CANCEL ORDER (UPDATED) =================
 bot.action(/cancel_(.+)/, async (ctx) => {
     const orderId = ctx.match[1];
-    const res = await callApi(`/cancel/${orderId}`);
-    ctx.answerCbQuery("Order Cancelled ✅");
-    ctx.reply("❌ Order has been cancelled.");
+    
+    // Naye panel ke hisab se status 8 matlab cancel/delete order
+    const responseData = await callVakApi('setStatus', { id: orderId, status: '8' });
+
+    ctx.answerCbQuery("Processing...");
+    
+    if (responseData && typeof responseData === 'string' && responseData.includes('ACCESS_CANCEL')) {
+        ctx.reply("❌ Order has been cancelled successfully.");
+    } else {
+        ctx.reply("⚠️ Could not cancel order (It might have expired or already processed).");
+    }
     await sendHome(ctx);
 });
+
 
 // ================= CREDITS, REFERRAL, TASKS (Rest of your code) =================
 
