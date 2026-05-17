@@ -100,7 +100,8 @@ async function loadDefaultForce(){
 // ================= API CONFIG =================
 
 const VAK_API_KEY = "e2ca8fcf76b64021a033b4ff76ca037e"; 
-const VAK_BASE_URL = "https://vak-sms.com/api";
+const VAK_BASE_URL = "https://vak-sms.com/v1";
+
 
 
 // ================= SERVICES =================
