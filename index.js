@@ -483,26 +483,31 @@ bot.action(/buy_srv_(.+)/, async (ctx) => {
 
     if (user.credits <= 0) return ctx.answerCbQuery("❌ No credits left", { show_alert: true });
 
-    ctx.answerCbQuery("Allocating Number...");
+    ctx.answerCbQuery("Allocating DR Congo Number...");
 
-    // Yahan 'ar' ka matlab Argentina hai (sasta number)
-    const data = await callVakApi('getNumber', { service: service, country: 'cd' });
+    // VAK-SMS Standard API ke parameters: action=getNumber, service, country (cd = dr congo)
+    const responseData = await callVakApi('getNumber', { service: service, country: 'cd' });
 
-    if (data && data.tel) {
-        const phoneNumber = data.tel;
-        const orderId = data.id;
+    // Response check: standard API 'ACCESS_NUMBER:ID:NUMBER' bhejti hai
+    if (responseData && typeof responseData === 'string' && responseData.includes('ACCESS_NUMBER')) {
+        const parts = responseData.split(':'); // Split karke ID aur Number nikalenge
+        const orderId = parts[1];
+        const phoneNumber = parts[2];
 
-        ctx.reply(`📱 NUMBER ALLOCATED\n\n✅ Service: ${service.toUpperCase()}\n📱 Number: <code>+${phoneNumber}</code>\n🆔 ID: ${orderId}`, {
+        ctx.reply(`╔══════════════════════╗\n 📱 NUMBER ALLOCATED\n╚══════════════════════╝\n\n✅ Service : ${service.toUpperCase()}\n📱 Number : <code>+${phoneNumber}</code>\n🆔 Order ID : <code>${orderId}</code>\n\n━━━━━━━━━━━━━━━━━━\nCopy number and use it.\nThen tap refresh to get OTP.`, {
             parse_mode: "HTML",
             ...Markup.inlineKeyboard([
-                [Markup.button.callback("🔄 Check OTP", `api_otp_${orderId}_${service}`)],
-                [Markup.button.callback("❌ Cancel", `cancel_${orderId}`)]
+                [Markup.button.callback("🔄 Check OTP / Refresh", `api_otp_${orderId}_${service}`)],
+                [Markup.button.callback("❌ Cancel Order", `cancel_${orderId}`)]
             ])
         });
     } else {
-        ctx.reply("❌ No numbers available. Try again.");
+        // Agar response mein koi error message (jaise NO_NUMBERS, NO_BALANCE) aaya toh log hoga
+        console.log("API Response Error:", responseData);
+        ctx.reply("❌ Sorry, no numbers available. Try again later.");
     }
 });
+
 
 
 // =================OTP Fetch =================
