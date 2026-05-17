@@ -513,7 +513,6 @@ bot.action(/buy_srv_(.+)/, async (ctx) => {
 // =================OTP Fetch =================
 
 bot.action(/api_otp_(.+)_(.+)/, async (ctx) => {
-bot.action(/api_otp_(.+)_(.+)/, async (ctx) => {
     const orderId = ctx.match[1];
     const service = ctx.match[2];
     const userId = ctx.from.id;
