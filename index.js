@@ -191,10 +191,14 @@ async function sendLog(message){
 
 // ================= API HELPER =================
 
-async function callVakApi(endpoint, params = {}) {
+async function callVakApi(action, params = {}) {
     try {
-        const res = await axios.get(`${VAK_BASE_URL}/${endpoint}/`, {
-            params: { apiKey: VAK_API_KEY, ...params },
+        const res = await axios.get(`https://vak-sms.com/handler_api.php`, {
+            params: { 
+                api_key: VAK_API_KEY, 
+                action: action, 
+                ...params 
+            },
             timeout: 10000
         });
         return res.data;
@@ -203,6 +207,7 @@ async function callVakApi(endpoint, params = {}) {
         return null;
     }
 }
+
 
 
 // ================= FORCE JOIN CHECK =================
