@@ -212,35 +212,31 @@ async function callVakApi(action, params = {}) {
 
     try {
 
-        const res = await axios.get(
-            "https://vak-sms.com/stubs/handler_api",
-            {
-                params: {
-                    apiKey: VAK_API_KEY,
-                    action: action,
-                    ...params
-                },
-                timeout: 10000
-            }
-        );
+        const url = "https://vak-sms.com/stubs/handler_api.php";
 
-        console.log("RESPONSE:", res.data);
+        const res = await axios.get(url, {
+            params: {
+                apiKey: VAK_API_KEY,
+                action,
+                ...params
+            },
+            headers: {
+                "User-Agent": "Mozilla/5.0"
+            },
+            timeout: 15000
+        });
+
+        console.log("FULL RESPONSE:", res.data);
 
         return res.data;
 
     } catch (err) {
 
-        console.log(
-            "ERROR:",
-            err.response?.data || err.message
-        );
+        console.log("FULL ERROR:", err.response?.data || err.message);
 
         return "ERROR";
-
     }
-
 }
-
 // ================= FORCE JOIN CHECK =================
 
 async function checkForceJoin(ctx){
@@ -597,7 +593,7 @@ bot.action(/select_country_(.+)_(.+)/, async (ctx) => {
 
         const responseData =
 await callVakApi(
-    'getNumberV2',
+    'getNumber',
     {
        service: service,
        country: country,
