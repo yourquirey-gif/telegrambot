@@ -773,7 +773,10 @@ bot.action(/api_otp_(.+)_(.+)/, async (ctx) => {
     ctx.answerCbQuery("Checking SMS...");
     
     // Naye document ke mutabik standard check
-    const responseData = await callVakApi('getStatus', { id: orderId });
+    const responseData = await callVakApi(
+    'getstatus',
+    { id: orderId }
+);
 
     if (responseData && typeof responseData === 'string' && responseData.includes('STATUS_OK')) {
         const smsCode = responseData.split(':')[1]; // STATUS_OK:12345 se OTP nikalega
@@ -797,7 +800,13 @@ bot.action(/cancel_(.+)/, async (ctx) => {
     const orderId = ctx.match[1];
     
     // Naye panel ke hisab se status 8 matlab cancel/delete order
-    const responseData = await callVakApi('setStatus', { id: orderId, status: '8' });
+    const responseData = await callVakApi(
+    'setstatus',
+    {
+       id: orderId,
+       status: '8'
+    }
+);
 
     ctx.answerCbQuery("Processing...");
     
