@@ -224,17 +224,17 @@ async function callVakApi(action, params = {}) {
             }
         );
 
+        console.log("FULL RESPONSE:", res.data);
+
         return res.data;
 
     } catch (err) {
 
-        console.log(
-            "VAK-API Error:",
-            err.message
-        );
+        console.log("ERROR DATA:", err.response?.data);
+        console.log("ERROR STATUS:", err.response?.status);
+        console.log("ERROR MESSAGE:", err.message);
 
-        return null;
-
+        return "ERROR";
     }
 
 }
