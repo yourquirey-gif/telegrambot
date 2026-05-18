@@ -609,6 +609,12 @@ bot.action(/select_country_(.+)_(.+)/, async (ctx) => {
             responseData
         );
 
+       return ctx.reply(
+`API TEST:
+
+${responseData}`
+);
+
         // ================= SUCCESS =================
 
         if(
