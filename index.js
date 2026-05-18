@@ -213,7 +213,7 @@ async function callVakApi(action, params = {}) {
     try {
 
         const res = await axios.get(
-            "https://vak-sms.com/stubs/handler_api.php",
+            "https://vak-sms.com/handler_api.php",
             {
                 params: {
                     apiKey: VAK_API_KEY,
