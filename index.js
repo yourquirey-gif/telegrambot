@@ -590,11 +590,10 @@ bot.action(/select_country_(.+)_(.+)/, async (ctx) => {
         // ================= API REQUEST =================
 
         const responseData = await callVakApi(
-    'getNumber',
+    'getnumber',
     {
        service: service,
-       country: country,
-       softId: "123"
+       country: country
     }
 );
 
