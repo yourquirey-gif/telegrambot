@@ -210,26 +210,35 @@ async function sendLog(message){
 // ================= API HELPER =================
 
 async function callVakApi(action, params = {}) {
+
     try {
 
-        const url =
-        `https://vak-sms.com/stubs/handler_api.php?api_key=${VAK_API_KEY}&action=${action}`;
-
-        const res = await axios.get(url, {
-            params: params,
-            timeout: 10000
-        });
+        const res = await axios.get(
+            `https://vak-sms.com/stubs/handler_api.php`,
+            {
+                params: {
+                    api_key: VAK_API_KEY,
+                    action: action,
+                    ...params
+                },
+                timeout: 10000
+            }
+        );
 
         return res.data;
 
     } catch (err) {
 
-        console.log("VAK-API Error:", err.message);
+        console.log(
+            "VAK-API Error:",
+            err.message
+        );
 
         return null;
-    }
-}
 
+    }
+
+}
 
 
 // ================= FORCE JOIN CHECK =================
