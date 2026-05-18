@@ -216,7 +216,7 @@ async function callVakApi(action, params = {}) {
 
         const res = await axios.get(url, {
             params: {
-                apiKey: VAK_API_KEY,
+                api_key: VAK_API_KEY,
                 action: action,
                 ...params
             }
