@@ -213,22 +213,28 @@ async function callVakApi(action, params = {}) {
 
     try {
 
-        const res = await axios.get(
-            "https://vak-sms.com/api/v1/getBalance",
-            {
-                params: {
-                    apiKey: VAK_API_KEY
-                }
-            }
-        );
+        const url =
+        `https://vak-sms.com/stubs/handler_api.php`;
 
-        console.log(res.data);
+        const res = await axios.get(url, {
+            params: {
+                api_key: VAK_API_KEY,
+                action: action,
+                ...params
+            },
+            timeout: 10000
+        });
+
+        console.log("RESPONSE:", res.data);
 
         return res.data;
 
     } catch (err) {
 
-        console.log(err.response?.data || err.message);
+        console.log(
+            "ERROR:",
+            err.response?.data || err.message
+        );
 
         return "ERROR";
 
@@ -592,10 +598,11 @@ bot.action(/select_country_(.+)_(.+)/, async (ctx) => {
 
         const responseData =
 await callVakApi(
-    "getNumber",
+    'getNumber',
     {
-        service: service,
-        country: country
+       service: service,
+       country: country,
+       operator: "any"
     }
 );
 
