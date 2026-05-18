@@ -595,17 +595,11 @@ bot.action(/select_country_(.+)_(.+)/, async (ctx) => {
 
         const responseData =
 await callVakApi(
-    'getNumber',
+    "getNumber",
     {
         service: service,
         country: country
     }
-);
-
-console.log(responseData);
-
-return ctx.reply(
-JSON.stringify(responseData, null, 2)
 );
 
         // ================= SUCCESS =================
