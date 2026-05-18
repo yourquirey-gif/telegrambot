@@ -114,6 +114,22 @@ const SERVICES = {
     "Facebook": "fb"
 };
 
+// ================= COUNTRIES =================
+
+const COUNTRIES = {
+
+    "🇷🇴 Romania": "ro",
+    "🇮🇩 Indonesia": "id",
+    "🇬🇧 United Kingdom": "gb",
+    "🇵🇭 Philippines": "ph",
+    "🇷🇺 Russia": "ru",
+    "🇰🇿 Kazakhstan": "kz",
+    "🇺🇦 Ukraine": "ua"
+
+};
+
+
+
 
 // ================= OWNER =================
 
@@ -476,49 +492,256 @@ Select a category to get a number
 Markup.inlineKeyboard(buttons));
 });
 
-// ================= BUY NUMBER (ONLY DR CONGO - FIXED) =================
+// ================= SELECT COUNTRY =================
+
 bot.action(/buy_srv_(.+)/, async (ctx) => {
-    let service = ctx.match[1];
-    const user = await User.findOne({ userId: String(ctx.from.id) });
 
-    if (user.credits <= 0) return ctx.answerCbQuery("❌ No credits left", { show_alert: true });
+    const service = ctx.match[1];
 
-    ctx.answerCbQuery("Allocating DR Congo Number...");
-    service = service.toLowerCase();
+    let buttons = [];
 
-    // Direct DR Congo ('cd') par request bhej rahe hain
-    const responseData = await callVakApi('getNumber', { service: service, country: 'cd' });
-    
-    console.log("VAK-SMS API Raw Response:", responseData); // Ye logs mein dikhega debug karne ke liye
+    Object.keys(COUNTRIES).forEach((name) => {
 
-    if (responseData && typeof responseData === 'string' && responseData.includes('ACCESS_NUMBER')) {
-        const parts = responseData.split(':'); 
-        const orderId = parts[1];
-        const phoneNumber = parts[2];
+        buttons.push([
+            Markup.button.callback(
+                name,
+                select_country_${service}_${COUNTRIES[name]}
+            )
+        ]);
 
-        ctx.reply(`╔══════════════════════╗\n 📱 DR CONGO NUMBER ALLOCATED\n╚══════════════════════╝\n\n✅ Service : ${service.toUpperCase()}\n📱 Number : <code>+${phoneNumber}</code>\n🆔 Order ID : <code>${orderId}</code>\n\n━━━━━━━━━━━━━━━━━━\nCopy number and use it.\nThen tap refresh to get OTP.`, {
-            parse_mode: "HTML",
-            ...Markup.inlineKeyboard([
-                [Markup.button.callback("🔄 Check OTP / Refresh", `api_otp_${orderId}_${service}`)],
-                [Markup.button.callback("❌ Cancel Order", `cancel_${orderId}`)]
-            ])
-        });
-    } else {
-        // Alag-alag errors ke liye sahi pehchan
-        if (responseData && typeof responseData === 'string' && responseData.includes('NO_BALANCE')) {
-            ctx.reply("❌ API Wallet mein balance nahi hai ya API Key galat hai!");
-        } else if (responseData && typeof responseData === 'string' && responseData.includes('NO_NUMBER')) {
-            ctx.reply("❌ DR Congo mein abhi is service ke saare numbers saste hone ki wajah se bik chuke hain. Kripya 2-5 minute baad dobara try karein.");
-        } else {
-            // Agar koi aur error ya unknown response aaye
-            ctx.reply("❌ DR Congo Stock Empty! Thodi der baad try karein (Try again later).");
-        }
-    }
+    });
+
+    buttons.push([
+        Markup.button.callback("🏠 Home", "home")
+    ]);
+
+    ctx.reply(
+`🌍 Select Country
+
+📦 Service:
+${service.toUpperCase()}`,
+Markup.inlineKeyboard(buttons)
+);
+
 });
 
 
+// ================= BUY NUMBER =================
 
+bot.action(/select_country_(.+)_(.+)/, async (ctx) => {
 
+    try{
+
+        let service = ctx.match[1];
+        let country = ctx.match[2];
+
+        const user = await User.findOne({
+            userId: String(ctx.from.id)
+        });
+
+        // ================= USER CHECK =================
+
+        if(!user){
+
+            return ctx.answerCbQuery(
+                "❌ User not found",
+                { show_alert:true }
+            );
+
+        }
+
+        // ================= BANNED CHECK =================
+
+        if(user.banned){
+
+            return ctx.answerCbQuery(
+                "❌ You are banned",
+                { show_alert:true }
+            );
+
+        }
+
+        // ================= CREDIT CHECK =================
+
+        if(user.credits <= 0){
+
+            return ctx.answerCbQuery(
+                "❌ No credits left",
+                { show_alert:true }
+            );
+
+        }
+
+        ctx.answerCbQuery(
+            "📡 Searching Number..."
+        );
+
+        service = service.toLowerCase();
+
+        // ================= API REQUEST =================
+
+        const responseData =
+        await callVakApi(
+            'getNumber',
+            {
+                service: service,
+                country: country
+            }
+        );
+
+        console.log(
+            "API RESPONSE:",
+            responseData
+        );
+
+        // ================= SUCCESS =================
+
+        if(
+            responseData &&
+            typeof responseData === "string" &&
+            responseData.includes("ACCESS_NUMBER")
+        ){
+
+            const parts =
+            responseData.split(":");
+
+            const orderId =
+            parts[1];
+
+            const phoneNumber =
+            parts[2];
+
+            return ctx.reply(
+
+`╔══════════════════════╗
+ 📱 NUMBER ALLOCATED
+╚══════════════════════╝
+
+🌍 Country :
+${country.toUpperCase()}
+
+✅ Service :
+${service.toUpperCase()}
+
+📱 Number :
+<code>+${phoneNumber}</code>
+
+🆔 Order ID :
+<code>${orderId}</code>
+
+━━━━━━━━━━━━━━━━━━
+Copy number and use it.
+
+Then tap refresh to get OTP.`,
+
+{
+    parse_mode:"HTML",
+
+    ...Markup.inlineKeyboard([
+
+        [
+            Markup.button.callback(
+                "🔄 Check OTP",
+                api_otp_${orderId}_${service}
+            )
+        ],
+
+        [
+            Markup.button.callback(
+                "❌ Cancel",
+                cancel_${orderId}
+            )
+        ]
+
+    ])
+
+}
+
+            );
+
+        }
+
+        // ================= API BALANCE LOW =================
+
+        else if(
+            responseData &&
+            responseData.includes("NO_BALANCE")
+        ){
+
+            return ctx.reply(
+                "❌ API wallet balance low."
+            );
+
+        }
+
+        // ================= NO NUMBER =================
+
+        else if(
+            responseData &&
+            (
+                responseData.includes("NO_NUMBERS") ||
+                responseData.includes("NO_NUMBER")
+            )
+        ){
+
+            return ctx.reply(
+
+`❌ No numbers available.
+
+🌍 Country :
+${country.toUpperCase()}
+
+📦 Service :
+${service.toUpperCase()}
+
+⏳ Try again later.`
+
+            );
+
+        }
+
+        // ================= BAD KEY =================
+
+        else if(
+            responseData &&
+            responseData.includes("BAD_KEY")
+        ){
+
+            return ctx.reply(
+                "❌ Invalid API key."
+            );
+
+        }
+
+        // ================= UNKNOWN =================
+
+        else{
+
+            return ctx.reply(
+
+`❌ Failed to get number.
+
+📡 API Response:
+${responseData || "NULL"}`
+
+            );
+
+        }
+
+    }catch(err){
+
+        console.log(
+            "BUY NUMBER ERROR:",
+            err
+        );
+
+        return ctx.reply(
+            "❌ Server error while buying number."
+        );
+
+    }
+
+});
 
 // =================OTP Fetch =================
 
