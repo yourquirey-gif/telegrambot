@@ -219,11 +219,7 @@ async function callVakApi(action, params = {}) {
                 apiKey: VAK_API_KEY,
                 action: action,
                 ...params
-            },
-            headers: {
-                "User-Agent": "Mozilla/5.0"
-            },
-            timeout: 15000
+            }
         });
 
         console.log("FULL RESPONSE:", res.data);
@@ -237,6 +233,7 @@ async function callVakApi(action, params = {}) {
         return "ERROR";
     }
 }
+
 
 // ================= FORCE JOIN CHECK =================
 
