@@ -214,30 +214,27 @@ async function callVakApi(action, params = {}) {
     try {
 
         const res = await axios.get(
-            "https://vak-sms.com/stubs/handler_api.php",
+            "https://vak-sms.com/api/v1/getBalance",
             {
                 params: {
-                    api_key: VAK_API_KEY,
-                    action: action,
-                    ...params
-                },
-                timeout: 10000
+                    apiKey: VAK_API_KEY
+                }
             }
         );
 
-        console.log("RESPONSE:", res.data);
+        console.log(res.data);
 
         return res.data;
 
     } catch (err) {
 
-        console.log("ERROR:", err.message);
+        console.log(err.response?.data || err.message);
 
         return "ERROR";
+
     }
 
 }
-
 
 // ================= FORCE JOIN CHECK =================
 
