@@ -601,7 +601,6 @@ await callVakApi(
     {
        service: service,
        country: country,
-       operator: "any"
     }
 );
 
