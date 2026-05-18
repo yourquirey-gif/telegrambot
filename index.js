@@ -216,8 +216,8 @@ async function callVakApi(action, params = {}) {
 
         const res = await axios.get(url, {
             params: {
-                api_Key: VAK_API_KEY,
-                action,
+                apiKey: VAK_API_KEY,
+                action: action,
                 ...params
             },
             headers: {
@@ -237,6 +237,7 @@ async function callVakApi(action, params = {}) {
         return "ERROR";
     }
 }
+
 // ================= FORCE JOIN CHECK =================
 
 async function checkForceJoin(ctx){
