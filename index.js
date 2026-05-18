@@ -535,12 +535,9 @@ Markup.inlineKeyboard(buttons)
 });
 
 
-// ================= BUY NUMBER =================
-
+// ================= BUY NUMBER (DYNAMIC FOR ALL COUNTRIES - FIXED) =================
 bot.action(/select_country_(.+)_(.+)/, async (ctx) => {
-
-    try{
-
+    try {
         let service = ctx.match[1];
         let country = ctx.match[2];
 
@@ -549,205 +546,97 @@ bot.action(/select_country_(.+)_(.+)/, async (ctx) => {
         });
 
         // ================= USER CHECK =================
-
-        if(!user){
-
-            return ctx.answerCbQuery(
-                "❌ User not found",
-                { show_alert:true }
-            );
-
+        if (!user) {
+            return ctx.answerCbQuery("❌ User not found", { show_alert: true });
         }
 
         // ================= BANNED CHECK =================
-
-        if(user.banned){
-
-            return ctx.answerCbQuery(
-                "❌ You are banned",
-                { show_alert:true }
-            );
-
+        if (user.banned) {
+            return ctx.answerCbQuery("❌ You are banned", { show_alert: true });
         }
 
         // ================= CREDIT CHECK =================
-
-        if(user.credits <= 0){
-
-            return ctx.answerCbQuery(
-                "❌ No credits left",
-                { show_alert:true }
-            );
-
+        if (user.credits <= 0) {
+            return ctx.answerCbQuery("❌ No credits left", { show_alert: true });
         }
 
-        ctx.answerCbQuery(
-            "📡 Searching Number..."
-        );
-
+        ctx.answerCbQuery("📡 Searching Number...");
         service = service.toLowerCase();
 
-        // ================= API REQUEST =================
+        // ================= API REQUEST (FIXED: getNumber with capital N) =================
+        let responseData = await callVakApi('getNumber', {
+            service: service,
+            country: country
+        });
 
-        const responseData = await callVakApi(
-    'getnumber',
-    {
-       service: service,
-       country: country
-    }
-);
+        if (responseData && typeof responseData === "string") {
+            responseData = responseData.trim();
+        }
 
-        // ================= SUCCESS =================
+        console.log(`API Request -> Country: ${country}, Service: ${service}, Response: ${responseData}`);
 
-        if(
-            responseData &&
-            typeof responseData === "string" &&
-            responseData.includes("ACCESS_NUMBER")
-        ){
-
-            const parts =
-            responseData.split(":");
-
-            const orderId =
-            parts[1];
-
-            const phoneNumber =
-            parts[2];
+        // ================= SUCCESS RESPONSE =================
+        if (responseData && typeof responseData === "string" && responseData.includes("ACCESS_NUMBER")) {
+            const parts = responseData.split(":");
+            const orderId = parts[1];
+            const phoneNumber = parts[2];
 
             return ctx.reply(
-
 `╔══════════════════════╗
  📱 NUMBER ALLOCATED
 ╚══════════════════════╝
 
-🌍 Country :
-${country.toUpperCase()}
-
-✅ Service :
-${service.toUpperCase()}
-
-📱 Number :
-<code>+${phoneNumber}</code>
-
-🆔 Order ID :
-<code>${orderId}</code>
+🌍 Country ID : ${country}
+✅ Service : ${service.toUpperCase()}
+📱 Number : <code>+${phoneNumber}</code>
+🆔 Order ID : <code>${orderId}</code>
 
 ━━━━━━━━━━━━━━━━━━
 Copy number and use it.
-
 Then tap refresh to get OTP.`,
-
-{
-    parse_mode:"HTML",
-
-    ...Markup.inlineKeyboard([
-
-        [
-            Markup.button.callback(
-                "🔄 Check OTP",
-                `api_otp_${orderId}_${service}`
-            )
-        ],
-
-        [
-            Markup.button.callback(
-                "❌ Cancel",
-                `cancel_${orderId}`
-            )
-        ]
-
-    ])
-
-}
-
+                {
+                    parse_mode: "HTML",
+                    ...Markup.inlineKeyboard([
+                        [Markup.button.callback("🔄 Check OTP", `api_otp_${orderId}_${service}`)],
+                        [Markup.button.callback("❌ Cancel", `cancel_${orderId}`)]
+                    ])
+                }
             );
-
         }
-
-        // ================= API BALANCE LOW =================
-
-        else if(
-            responseData &&
-            responseData.includes("NO_BALANCE")
-        ){
-
+        // ================= API ERRORS HANDLING =================
+        else if (responseData && responseData.includes("NO_BALANCE")) {
+            return ctx.reply("❌ API wallet balance low. Please contact Admin.");
+        }
+        else if (responseData && (responseData.includes("NO_NUMBERS") || responseData.includes("NO_NUMBER"))) {
             return ctx.reply(
-                "❌ API wallet balance low."
+`❌ No numbers available right now.
+
+🌍 Country ID : ${country}
+📦 Service : ${service.toUpperCase()}
+
+⏳ Try again later or choose another country.`
             );
-
         }
-
-        // ================= NO NUMBER =================
-
-        else if(
-            responseData &&
-            (
-                responseData.includes("NO_NUMBERS") ||
-                responseData.includes("NO_NUMBER")
-            )
-        ){
-
-            return ctx.reply(
-
-`❌ No numbers available.
-
-🌍 Country :
-${country.toUpperCase()}
-
-📦 Service :
-${service.toUpperCase()}
-
-⏳ Try again later.`
-
-            );
-
+        else if (responseData && responseData.includes("BAD_KEY")) {
+            return ctx.reply("❌ Invalid API Key configuration.");
         }
-
-        // ================= BAD KEY =================
-
-        else if(
-            responseData &&
-            responseData.includes("BAD_KEY")
-        ){
-
+        else {
             return ctx.reply(
-                "❌ Invalid API key."
-            );
-
-        }
-
-        // ================= UNKNOWN =================
-
-        else{
-
-            return ctx.reply(
-
 `❌ Failed to get number.
-
-📡 API Response:
-${responseData || "NULL"}`
-
+📡 API Response: <code>${responseData || "NULL"}</code>`, 
+                { parse_mode: "HTML" }
             );
-
         }
 
-    }catch(err){
-
-        console.log(
-            "BUY NUMBER ERROR:",
-            err
-        );
-
-        return ctx.reply(
-            "❌ Server error while buying number."
-        );
-
+    } catch (err) {
+        console.log("BUY NUMBER ERROR:", err);
+        return ctx.reply("❌ Server error while buying number.");
     }
-
 });
 
-// =================OTP Fetch =================
 
+
+// ================= OTP FETCH SYSTEM (FIXED ACTION) =================
 bot.action(/api_otp_(.+)_(.+)/, async (ctx) => {
     const orderId = ctx.match[1];
     const service = ctx.match[2];
@@ -755,31 +644,28 @@ bot.action(/api_otp_(.+)_(.+)/, async (ctx) => {
 
     const user = await User.findOne({ userId: String(userId) });
 
-    // --- Line 522 se 534 ka aapka original credit-check code ---
     if (!user || user.credits <= 0) {
         return ctx.reply(
             `❌ YOU DON'T HAVE ENOUGH CREDITS\n\n💎 Your Balance: 0 credits\n\n📞 Please contact admin to buy credits:\n${creditSettings.contact}`,
             {
                 reply_markup: {
-                    inline_keyboard: [
-                        [{ text: "🛒 Buy Credits", callback_data: "buy" }]
-                    ]
+                    inline_keyboard: [[{ text: "🛒 Buy Credits", callback_data: "buy" }]]
                 }
             }
         );
     }
-    // -----------------------------------------------------------
 
     ctx.answerCbQuery("Checking SMS...");
     
-    // Naye document ke mutabik standard check
-    const responseData = await callVakApi(
-    'getstatus',
-    { id: orderId }
-);
+    // Fixed capitalization: getStatus
+    let responseData = await callVakApi('getStatus', { id: orderId });
+
+    if (responseData && typeof responseData === 'string') {
+        responseData = responseData.trim();
+    }
 
     if (responseData && typeof responseData === 'string' && responseData.includes('STATUS_OK')) {
-        const smsCode = responseData.split(':')[1]; // STATUS_OK:12345 se OTP nikalega
+        const smsCode = responseData.split(':')[1]; 
 
         user.credits = Math.max(0, user.credits - 1);
         await user.save();
@@ -794,19 +680,16 @@ bot.action(/api_otp_(.+)_(.+)/, async (ctx) => {
 
 
 
-
-// ================= CANCEL ORDER (UPDATED) =================
+// ================= CANCEL ORDER (FIXED ACTION) =================
 bot.action(/cancel_(.+)/, async (ctx) => {
     const orderId = ctx.match[1];
     
-    // Naye panel ke hisab se status 8 matlab cancel/delete order
-    const responseData = await callVakApi(
-    'setstatus',
-    {
-       id: orderId,
-       status: '8'
+    // Fixed capitalization: setStatus
+    let responseData = await callVakApi('setStatus', { id: orderId, status: '8' });
+
+    if (responseData && typeof responseData === 'string') {
+        responseData = responseData.trim();
     }
-);
 
     ctx.answerCbQuery("Processing...");
     
@@ -817,6 +700,7 @@ bot.action(/cancel_(.+)/, async (ctx) => {
     }
     await sendHome(ctx);
 });
+
 
 
 // ================= CREDITS, REFERRAL, TASKS (Rest of your code) =================
