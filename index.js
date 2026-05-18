@@ -214,25 +214,24 @@ async function callVakApi(action, params = {}) {
     try {
 
         const res = await axios.get(
-            `https://vak-sms.com/api/v1/${action}`,
+            "https://vak-sms.com/stubs/handler_api.php",
             {
                 params: {
-                    apiKey: VAK_API_KEY,
+                    api_key: VAK_API_KEY,
+                    action: action,
                     ...params
                 },
                 timeout: 10000
             }
         );
 
-        console.log("FULL RESPONSE:", res.data);
+        console.log("RESPONSE:", res.data);
 
         return res.data;
 
     } catch (err) {
 
-        console.log("ERROR DATA:", err.response?.data);
-        console.log("ERROR STATUS:", err.response?.status);
-        console.log("ERROR MESSAGE:", err.message);
+        console.log("ERROR:", err.message);
 
         return "ERROR";
     }
