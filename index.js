@@ -117,16 +117,15 @@ const SERVICES = {
 // ================= COUNTRIES =================
 
 const COUNTRIES = {
-   
 
-    "🇷🇴 Romania": "ro",
-    "🇮🇩 Indonesia": "id",
-    "🇨🇩 DR Congo": "cd",
-    "🇬🇧 United Kingdom": "gb",
-    "🇵🇭 Philippines": "ph",
-    "🇷🇺 Russia": "ru",
-    "🇰🇿 Kazakhstan": "kz",
-    "🇺🇦 Ukraine": "ua"
+    "🇷🇺 Russia": "0",
+    "🇰🇿 Kazakhstan": "1",
+    "🇺🇦 Ukraine": "2",
+    "🇵🇭 Philippines": "4",
+    "🇮🇩 Indonesia": "6",
+    "🇬🇧 United Kingdom": "16",
+    "🇨🇩 DR Congo": "18",
+    "🇷🇴 Romania": "177"
 
 };
 
