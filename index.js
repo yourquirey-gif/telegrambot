@@ -585,7 +585,7 @@ bot.action(/select_country_(.+)_(.+)/, async (ctx) => {
             'getNumber',
             {
                 service: service,
-                country: country
+                country: country,
                operator: "any"
             }
         );
