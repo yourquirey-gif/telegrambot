@@ -595,23 +595,18 @@ bot.action(/select_country_(.+)_(.+)/, async (ctx) => {
         // ================= API REQUEST =================
 
         const responseData =
-        await callVakApi(
-            'getNumber',
-            {
-                service: service,
-                country: country,
-            }
-        );
+await callVakApi(
+    'getNumber',
+    {
+        service: service,
+        country: country
+    }
+);
 
-        console.log(
-            "API RESPONSE:",
-            responseData
-        );
+console.log(responseData);
 
-       return ctx.reply(
-`API TEST:
-
-${responseData}`
+return ctx.reply(
+JSON.stringify(responseData, null, 2)
 );
 
         // ================= SUCCESS =================
