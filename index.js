@@ -592,7 +592,6 @@ bot.action(/select_country_(.+)_(.+)/, async (ctx) => {
             {
                 service: service,
                 country: country,
-               operator: "any"
             }
         );
 
