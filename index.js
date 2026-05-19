@@ -580,11 +580,23 @@ const limit = 10;
 const skip =
 (page - 1) * limit;
 
-const countries =
-await Country.find()
-.sort({ price: 1 })
-.skip(skip)
-.limit(limit);
+let countries =
+await Country.find();
+
+countries.sort((a,b)=>{
+
+const aPrice =
+a.servicePrices[service] || 999;
+
+const bPrice =
+b.servicePrices[service] || 999;
+
+return aPrice - bPrice;
+
+});
+
+countries =
+countries.slice(skip, skip + limit);
 
 const total =
 await Country.countDocuments();
@@ -603,8 +615,8 @@ const c1 = countries[i];
 row.push(
 
 Markup.button.callback(
-`${c1.name} • 💎 ${c1.price}`,
-`select_country_${service}_${c1.countryId}_${c1.countryCode}_${c1.price}`
+`${c1.name} • 💎 ${c1.servicePrices[service] || 1}`,
+`select_country_${service}_${c1.countryId}_${c1.countryCode}_${c1.servicePrices[service] || 1}`
 )
 
 );
@@ -616,8 +628,8 @@ const c2 = countries[i + 1];
 row.push(
 
 Markup.button.callback(
-`${c2.name} • 💎 ${c2.price}`,
-`select_country_${service}_${c2.countryId}_${c2.countryCode}_${c2.price}`
+`${c2.name} • 💎 ${c2.servicePrices[service] || 1}`,
+`select_country_${service}_${c2.countryId}_${c2.countryCode}_${c2.servicePrices[service] || 1}`
 )
 
 );
@@ -1349,7 +1361,6 @@ bot.command("countries", async(ctx)=>{
 
 🆔 ID: ${c.countryId}
 📞 +${c.countryCode}
-💎 ${c.price} credits
 
 `;
 
@@ -1813,7 +1824,7 @@ return;
 ctx.reply(
 `🌍 Use Command:
 
-/addcountry 🇮🇳 India 22 91 5`
+/addcountry 🇮🇳 India 22 91`
 );
 
 });
