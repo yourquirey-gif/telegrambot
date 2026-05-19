@@ -1509,9 +1509,9 @@ bot.command("removeservice", async(ctx)=>{
         );
     }
 
-    await Service.deleteOne({
-        serviceCode: code
-    });
+    await Service.deleteMany({
+    serviceCode: code
+});
 
     ctx.reply(
 `✅ Service Removed
