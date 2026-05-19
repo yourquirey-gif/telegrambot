@@ -160,7 +160,7 @@ let creditSettings = {
 
    referralBonus: 1,
 
-   newUserBonus: 3
+   newUserBonus: 1
 
 };
 
