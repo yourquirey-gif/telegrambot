@@ -510,7 +510,7 @@ bot.action(/buy_srv_(.+)/, async (ctx) => {
         buttons.push([
             Markup.button.callback(
                 name,
-                `select_country_${service}_${COUNTRIES[name]}`
+                `select_country_${service}_${COUNTRIES[name].id}_${COUNTRIES[name].code}`
             )
         ]);
 
