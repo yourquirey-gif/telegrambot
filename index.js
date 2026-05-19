@@ -81,11 +81,14 @@ const Admin = mongoose.model(
 const countrySchema = new mongoose.Schema({
 
     name: String,
+
     countryId: String,
+
     countryCode: String,
-    price: {
-        type: Number,
-        default: 1
+
+    servicePrices: {
+        type: Object,
+        default: {}
     }
 
 });
@@ -1233,62 +1236,65 @@ bot.command("unban", async(ctx)=>{
 
 bot.command("addcountry", async(ctx)=>{
 
-    if(!(await isAdmin(ctx.from.id)))
-    return ctx.reply("❌ Admin only");
+if(!(await isAdmin(ctx.from.id)))
+return;
 
-    const args =
-    ctx.message.text.split(" ");
+const args =
+ctx.message.text.split(" ");
 
-    if(args.length < 5){
+if(args.length < 5){
 
-        return ctx.reply(
+return ctx.reply(
+
 `❌ Example:
 
-/addcountry 🇮🇳 India 22 91 2`
-        );
+/addcountry 🇮🇳 India 22 91`
 
-    }
+);
 
-    const name =
-    args[1] + " " + args[2];
+}
 
-    const countryId =
-    args[3];
+const name =
+args[1] + " " + args[2];
 
-    const countryCode =
-    args[4];
+const countryId =
+args[3];
 
-    const price =
-    Number(args[5]) || 1;
+const countryCode =
+args[4];
 
-    const already =
-    await Country.findOne({
-        countryId
-    });
+const already =
+await Country.findOne({
+countryId
+});
 
-    if(already){
-        return ctx.reply(
-            "❌ Country already exists"
-        );
-    }
+if(already){
 
-    await Country.create({
+return ctx.reply(
+"❌ Country already exists"
+);
 
-        name,
-        countryId,
-        countryCode,
-        price
+}
 
-    });
+await Country.create({
 
-    ctx.reply(
+name,
+countryId,
+countryCode
+
+});
+
+ctx.reply(
+
 `✅ Country Added
 
 🌍 ${name}
+
 🆔 ${countryId}
-📞 +${countryCode}
-💎 ${price} credits`
-    );
+
+📞 +${countryCode}`
+
+);
 
 });
 
@@ -1354,6 +1360,75 @@ bot.command("countries", async(ctx)=>{
 });
 
 // ================= ADD SERVICE =================
+
+bot.command("setprice", async(ctx)=>{
+
+if(!(await isAdmin(ctx.from.id)))
+return;
+
+const args =
+ctx.message.text.split(" ");
+
+if(args.length < 4){
+
+return ctx.reply(
+
+`❌ Example:
+
+/setprice tg 22 5
+
+tg = service code
+22 = country id
+5 = credits`
+
+);
+
+}
+
+const service =
+args[1];
+
+const countryId =
+args[2];
+
+const price =
+Number(args[3]);
+
+const country =
+await Country.findOne({
+countryId
+});
+
+if(!country){
+
+return ctx.reply(
+"❌ Country not found"
+);
+
+}
+
+country.servicePrices[service] =
+price;
+
+await country.save();
+
+ctx.reply(
+
+`✅ Price Updated
+
+📦 Service:
+${service}
+
+🌍 Country:
+${country.name}
+
+💎 Price:
+${price}`
+
+);
+
+});
+
 
 bot.command("addservice", async(ctx)=>{
 
@@ -1712,6 +1787,13 @@ Markup.button.callback(
 "💸 Deduct All",
 "admin_deductall"
 )
+],
+
+[
+Markup.button.callback(
+"💎 Set Price for service which country",
+"admin_setprice2"
+)
 ]
 
 ])
@@ -1810,6 +1892,25 @@ ctx.reply(
 `💸 Use Command:
 
 /deductall 2`
+);
+
+});
+
+bot.action("admin_setprice2", async(ctx)=>{
+
+if(!(await isAdmin(ctx.from.id)))
+return;
+
+ctx.reply(
+
+`💎 Use Command:
+
+/setprice tg 22 5
+
+tg = service code
+22 = country id
+5 = credits`
+
 );
 
 });
