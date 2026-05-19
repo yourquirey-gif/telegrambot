@@ -532,7 +532,7 @@ Markup.inlineKeyboard(buttons)
 
 
 // ================= BUY NUMBER (DYNAMIC FOR ALL COUNTRIES - FIXED) =================
-bot.action(/select_country_(.+)_(.+)/, async (ctx) => {
+bot.action(/select_country_(.+)_(.+)_(.+)/, async (ctx) => {
     try {
         let service = ctx.match[1];
         let country = ctx.match[2];
@@ -584,7 +584,7 @@ bot.action(/select_country_(.+)_(.+)/, async (ctx) => {
 
 🌍 Country ID : ${country}
 ✅ Service : ${service.toUpperCase()}
-📱 Number : <code>+${phoneNumber.slice(0,2)} ${phoneNumber.slice(2)}</code>
+📱 Number : <code>+${countryCode} ${phoneNumber.slice(countryCode.length)}</code>
 🆔 Order ID : <code>${orderId}</code>
 
 ━━━━━━━━━━━━━━━━━━
