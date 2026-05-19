@@ -326,7 +326,7 @@ if(!user){
 {
     parse_mode:"HTML",
     ...Markup.inlineKeyboard([
-        [Markup.button.callback("🟢 Online Devices", "devices_1")],
+        [Markup.button.callback("🟢 Get Number", "devices_1")],
         [Markup.button.callback("💎 My Credits", "credits"), Markup.button.callback("🎁 Tasks", "tasks")],
         [Markup.button.callback("👥 Referral", "referral"), Markup.button.callback("🛒 Buy Credits", "buy")]
     ])
