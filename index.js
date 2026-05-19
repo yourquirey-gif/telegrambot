@@ -817,9 +817,9 @@ bot.action(/api_otp_(.+)_(.+)_(.+)/, async (ctx) => {
 
         ctx.reply(`╔══════════════════════╗\n 📩 NEW OTP RECEIVED\n╚══════════════════════╝\n\n🔐 OTP : <code>${smsCode}</code>\n\n💎 -1 Credit Deducted\n💰 Remaining : ${user.credits} credits`, { parse_mode: "HTML" });
     } else if (responseData === 'STATUS_WAIT_CODE') {
-        ctx.reply("⚠️ No OTP yet. Status: Waiting for SMS...", Markup.inlineKeyboard([[Markup.button.callback("🔄 Refresh Again", `api_otp_${orderId}_${service}`)]]));
+        ctx.reply("⚠️ No OTP yet. Status: Waiting for SMS...", Markup.inlineKeyboard([[Markup.button.callback("🔄 Refresh Again", `api_otp_${orderId}_${service}_${price}`)]]));
     } else {
-        ctx.reply("⚠️ No OTP received yet or session expired. Try refreshing in a bit.", Markup.inlineKeyboard([[Markup.button.callback("🔄 Refresh", `api_otp_${orderId}_${service}`)]]));
+        ctx.reply("⚠️ No OTP received yet or session expired. Try refreshing in a bit.", Markup.inlineKeyboard([[Markup.button.callback("🔄 Refresh", `api_otp_${orderId}_${service}_${price}`)]]));
     }
 });
 
