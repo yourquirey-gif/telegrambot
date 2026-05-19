@@ -1916,7 +1916,7 @@ ctx.reply(
 
 `💎 Use Command:
 
-/setprice tg 22 5
+/setcountryprice tg 22 5
 
 tg = service code
 22 = country id
