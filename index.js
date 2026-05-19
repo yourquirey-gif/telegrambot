@@ -1372,7 +1372,7 @@ bot.command("countries", async(ctx)=>{
 
 // ================= ADD SERVICE =================
 
-bot.command("setprice", async(ctx)=>{
+bot.command("setcountryprice", async(ctx)=>{
 
 if(!(await isAdmin(ctx.from.id)))
 return;
@@ -1386,7 +1386,7 @@ return ctx.reply(
 
 `❌ Example:
 
-/setprice tg 22 5
+/setcountryprice tg 22 5
 
 tg = service code
 22 = country id
