@@ -1669,6 +1669,49 @@ Markup.button.callback(
 "❌ Remove Admin",
 "admin_removeadmin"
 )
+],
+
+   [
+Markup.button.callback(
+"🌍 Add Country",
+"admin_addcountry"
+),
+
+Markup.button.callback(
+"❌ Remove Country",
+"admin_removecountry"
+)
+],
+
+[
+Markup.button.callback(
+"📋 Countries",
+"admin_countries"
+),
+
+Markup.button.callback(
+"📦 Services",
+"admin_services"
+)
+],
+
+[
+Markup.button.callback(
+"➕ Add Service",
+"admin_addservice"
+),
+
+Markup.button.callback(
+"➖ Remove Service",
+"admin_removeservice"
+)
+],
+
+[
+Markup.button.callback(
+"💸 Deduct All",
+"admin_deductall"
+)
 ]
 
 ])
@@ -1680,7 +1723,96 @@ Markup.button.callback(
 
 // ================= ADMIN BUTTON ACTIONS =================
 
+bot.action("admin_addcountry", async(ctx)=>{
 
+if(!(await isAdmin(ctx.from.id)))
+return;
+
+ctx.reply(
+`🌍 Use Command:
+
+/addcountry 🇮🇳 India 22 91 5`
+);
+
+});
+
+bot.action("admin_removecountry", async(ctx)=>{
+
+if(!(await isAdmin(ctx.from.id)))
+return;
+
+ctx.reply(
+`❌ Use Command:
+
+/removecountry 22`
+);
+
+});
+
+bot.action("admin_countries", async(ctx)=>{
+
+if(!(await isAdmin(ctx.from.id)))
+return;
+
+ctx.reply(
+`📋 Use Command:
+
+/countries`
+);
+
+});
+
+bot.action("admin_services", async(ctx)=>{
+
+if(!(await isAdmin(ctx.from.id)))
+return;
+
+ctx.reply(
+`📦 Use Command:
+
+/services`
+);
+
+});
+
+bot.action("admin_addservice", async(ctx)=>{
+
+if(!(await isAdmin(ctx.from.id)))
+return;
+
+ctx.reply(
+`➕ Use Command:
+
+/addservice Telegram tg`
+);
+
+});
+
+bot.action("admin_removeservice", async(ctx)=>{
+
+if(!(await isAdmin(ctx.from.id)))
+return;
+
+ctx.reply(
+`➖ Use Command:
+
+/removeservice tg`
+);
+
+});
+
+bot.action("admin_deductall", async(ctx)=>{
+
+if(ctx.from.id !== OWNER_ID)
+return;
+
+ctx.reply(
+`💸 Use Command:
+
+/deductall 2`
+);
+
+});
 
 bot.action("admin_removeforce", async(ctx)=>{
 
