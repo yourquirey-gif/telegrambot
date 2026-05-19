@@ -117,8 +117,11 @@ const SERVICES = {
 // ================= COUNTRIES =================
 
 const COUNTRIES = {
-   
-    "🇨🇩 DR Congo": "18"
+
+    "🇨🇩 DR Congo": {
+        id: "18",
+        code: "243"
+    }
 
 };
 
