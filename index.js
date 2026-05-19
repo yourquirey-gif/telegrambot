@@ -536,6 +536,7 @@ bot.action(/select_country_(.+)_(.+)_(.+)/, async (ctx) => {
     try {
         let service = ctx.match[1];
         let country = ctx.match[2];
+       let countryCode = ctx.match[3];
 
         const user = await User.findOne({
             userId: String(ctx.from.id)
