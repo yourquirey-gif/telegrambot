@@ -581,7 +581,7 @@ bot.action(/select_country_(.+)_(.+)/, async (ctx) => {
 
 🌍 Country ID : ${country}
 ✅ Service : ${service.toUpperCase()}
-📱 Number : <code>+${phoneNumber}</code>
+📱 Number : <code>+${phoneNumber.slice(0,2)} ${phoneNumber.slice(2)}</code>
 🆔 Order ID : <code>${orderId}</code>
 
 ━━━━━━━━━━━━━━━━━━
