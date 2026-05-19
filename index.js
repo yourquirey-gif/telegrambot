@@ -78,6 +78,36 @@ const Admin = mongoose.model(
    adminSchema
 );
 
+const countrySchema = new mongoose.Schema({
+
+    name: String,
+    countryId: String,
+    countryCode: String,
+    price: {
+        type: Number,
+        default: 1
+    }
+
+});
+
+const Country = mongoose.model(
+    "Country",
+    countrySchema
+);
+
+const serviceSchema = new mongoose.Schema({
+
+    name: String,
+    serviceCode: String
+
+});
+
+const Service = mongoose.model(
+    "Service",
+    serviceSchema
+);
+
+
 async function loadDefaultForce(){
 
    const exists =
@@ -101,32 +131,6 @@ async function loadDefaultForce(){
 
 const VAK_API_KEY = "3dfbbfa08fa04c40bb8fc462411ab52f"; 
 const VAK_BASE_URL = "https://vak-sms.com/v1";
-
-
-
-// ================= SERVICES =================
-
-const SERVICES = {
-    "Telegram": "tg",
-    "WhatsApp": "wa",
-    "Instagram": "ig",
-    "Google/Gmail": "go",
-    "Facebook": "fb"
-};
-
-// ================= COUNTRIES =================
-
-const COUNTRIES = {
-
-    "🇨🇩 DR Congo": {
-        id: "18",
-        code: "243"
-    }
-
-};
-
-
-
 
 // ================= OWNER =================
 
@@ -319,7 +323,7 @@ if(!user){
 {
     parse_mode:"HTML",
     ...Markup.inlineKeyboard([
-        [Markup.button.callback("🟢 Online Devices", "devices")],
+        [Markup.button.callback("🟢 Online Devices", "devices_1")],
         [Markup.button.callback("💎 My Credits", "credits"), Markup.button.callback("🎁 Tasks", "tasks")],
         [Markup.button.callback("👥 Referral", "referral"), Markup.button.callback("🛒 Buy Credits", "buy")]
     ])
@@ -466,77 +470,219 @@ bot.action("check_join", async(ctx)=>{
 
 // ================= DEVICES (Category Fetch) =================
 
-bot.action("devices", async(ctx)=>{
-    const user = await User.findOne({
-   userId: String(ctx.from.id)
+bot.action(/devices_(\d+)?/, async(ctx)=>{
+
+const page =
+Number(ctx.match[1]) || 1;
+
+const limit = 5;
+
+const skip =
+(page - 1) * limit;
+
+const services =
+await Service.find()
+.skip(skip)
+.limit(limit);
+
+const total =
+await Service.countDocuments();
+
+const totalPages =
+Math.ceil(total / limit);
+
+const user =
+await User.findOne({
+userId: String(ctx.from.id)
 });
 
-const credits = user.credits;
-    let buttons = [];
-    Object.keys(SERVICES).forEach((name)=>{
-        buttons.push([Markup.button.callback(`📂 ${name}`, `buy_srv_${SERVICES[name]}`)]);
-    });
+let buttons = [];
 
-    buttons.push([
-        Markup.button.callback("🔄 Refresh", "devices"),
-        Markup.button.callback("🏠 Home", "home")
-    ]);
-    
+for(const s of services){
 
+buttons.push([
+Markup.button.callback(
+`📂 ${s.name}`,
+`buy_srv_${s.serviceCode}_1`
+)
+]);
 
-    ctx.reply(
+}
+
+let nav = [];
+
+if(page > 1){
+
+nav.push(
+Markup.button.callback(
+"⬅ Previous",
+`devices_${page - 1}`
+)
+);
+
+}
+
+if(page < totalPages){
+
+nav.push(
+Markup.button.callback(
+"Next ➡",
+`devices_${page + 1}`
+)
+);
+
+}
+
+if(nav.length > 0){
+buttons.push(nav);
+}
+
+buttons.push([
+Markup.button.callback(
+"🏠 Home",
+"home"
+)
+]);
+
+ctx.reply(
+
 `╔══════════════════════╗
- 🟢 ONLINE CATEGORIES
+ 🟢 ONLINE SERVICES
 ╚══════════════════════╝
 
-Select a category to get a number
+💎 Credits:
+${user.credits}
 
-💎 Credits : ${credits}
+📄 Page:
+${page}/${totalPages}`,
 
-━━━━━━━━━━━━━━━━━━`,
-Markup.inlineKeyboard(buttons));
-});
-
-// ================= SELECT COUNTRY =================
-
-bot.action(/buy_srv_(.+)/, async (ctx) => {
-
-    const service = ctx.match[1];
-
-    let buttons = [];
-
-    Object.keys(COUNTRIES).forEach((name) => {
-
-        buttons.push([
-            Markup.button.callback(
-                name,
-                `select_country_${service}_${COUNTRIES[name].id}_${COUNTRIES[name].code}`
-            )
-        ]);
-
-    });
-
-    buttons.push([
-        Markup.button.callback("🏠 Home", "home")
-    ]);
-
-    ctx.reply(
-`🌍 Select Country
-
-📦 Service:
-${service.toUpperCase()}`,
 Markup.inlineKeyboard(buttons)
+
 );
 
 });
 
 
+// ================= SELECT COUNTRY =================
+
+bot.action(/buy_srv_(.+)_(\d+)?/, async (ctx) => {
+
+const service = ctx.match[1];
+
+const page =
+Number(ctx.match[2]) || 1;
+
+const limit = 10;
+
+const skip =
+(page - 1) * limit;
+
+const countries =
+await Country.find()
+.sort({ price: 1 })
+.skip(skip)
+.limit(limit);
+
+const total =
+await Country.countDocuments();
+
+const totalPages =
+Math.ceil(total / limit);
+
+let buttons = [];
+
+for(let i = 0; i < countries.length; i += 2){
+
+let row = [];
+
+const c1 = countries[i];
+
+row.push(
+
+Markup.button.callback(
+`${c1.name} • 💎 ${c1.price}`,
+`select_country_${service}_${c1.countryId}_${c1.countryCode}_${c1.price}`
+)
+
+);
+
+if(countries[i + 1]){
+
+const c2 = countries[i + 1];
+
+row.push(
+
+Markup.button.callback(
+`${c2.name} • 💎 ${c2.price}`,
+`select_country_${service}_${c2.countryId}_${c2.countryCode}_${c2.price}`
+)
+
+);
+
+}
+
+buttons.push(row);
+
+}
+
+let nav = [];
+
+if(page > 1){
+
+nav.push(
+Markup.button.callback(
+"⬅ Previous",
+`buy_srv_${service}_${page - 1}`
+)
+);
+
+}
+
+if(page < totalPages){
+
+nav.push(
+Markup.button.callback(
+"Next ➡",
+`buy_srv_${service}_${page + 1}`
+)
+);
+
+}
+
+if(nav.length > 0){
+buttons.push(nav);
+}
+
+buttons.push([
+Markup.button.callback(
+"🏠 Home",
+"home"
+)
+]);
+
+ctx.reply(
+
+`🌍 Select Country
+
+📦 Service:
+${service.toUpperCase()}
+
+📄 Page:
+${page}/${totalPages}`,
+
+Markup.inlineKeyboard(buttons)
+
+);
+
+});
+
 // ================= BUY NUMBER (DYNAMIC FOR ALL COUNTRIES - FIXED) =================
-bot.action(/select_country_(.+)_(.+)_(.+)/, async (ctx) => {
+bot.action(/select_country_(.+)_(.+)_(.+)_(.+)/, async (ctx) => {
     try {
         let service = ctx.match[1];
         let country = ctx.match[2];
        let countryCode = ctx.match[3];
+       let price = Number(ctx.match[4]);
 
         const user = await User.findOne({
             userId: String(ctx.from.id)
@@ -553,7 +699,7 @@ bot.action(/select_country_(.+)_(.+)_(.+)/, async (ctx) => {
         }
 
         // ================= CREDIT CHECK =================
-        if (user.credits <= 0) {
+        if (user.credits < price) {
             return ctx.answerCbQuery("❌ No credits left", { show_alert: true });
         }
 
@@ -585,7 +731,7 @@ bot.action(/select_country_(.+)_(.+)_(.+)/, async (ctx) => {
 
 🌍 Country ID : ${country}
 ✅ Service : ${service.toUpperCase()}
-📱 Number : <code>+${countryCode} ${phoneNumber.slice(countryCode.length)}</code>
+📱 Number : <code>+${countryCode} ${phoneNumber}</code>
 🆔 Order ID : <code>${orderId}</code>
 
 ━━━━━━━━━━━━━━━━━━
@@ -594,7 +740,7 @@ Then tap refresh to get OTP.`,
                 {
                     parse_mode: "HTML",
                     ...Markup.inlineKeyboard([
-                        [Markup.button.callback("🔄 Check OTP", `api_otp_${orderId}_${service}`)],
+                        [Markup.button.callback("🔄 Check OTP", `api_otp_${orderId}_${service}_${price}`)],
                         [Markup.button.callback("❌ Cancel", `cancel_${orderId}`)]
                     ])
                 }
@@ -634,9 +780,11 @@ Then tap refresh to get OTP.`,
 
 
 // ================= OTP FETCH SYSTEM (FIXED ACTION) =================
-bot.action(/api_otp_(.+)_(.+)/, async (ctx) => {
+
+bot.action(/api_otp_(.+)_(.+)_(.+)/, async (ctx) => {
     const orderId = ctx.match[1];
     const service = ctx.match[2];
+   const price = Number(ctx.match[3]);
     const userId = ctx.from.id;
 
     const user = await User.findOne({ userId: String(userId) });
@@ -664,7 +812,7 @@ bot.action(/api_otp_(.+)_(.+)/, async (ctx) => {
     if (responseData && typeof responseData === 'string' && responseData.includes('STATUS_OK')) {
         const smsCode = responseData.split(':')[1]; 
 
-        user.credits = Math.max(0, user.credits - 1);
+        user.credits = Math.max(0, user.credits - price);
         await user.save();
 
         ctx.reply(`╔══════════════════════╗\n 📩 NEW OTP RECEIVED\n╚══════════════════════╝\n\n🔐 OTP : <code>${smsCode}</code>\n\n💎 -1 Credit Deducted\n💰 Remaining : ${user.credits} credits`, { parse_mode: "HTML" });
@@ -710,7 +858,14 @@ bot.action("credits", async(ctx)=>{
 
 const credits = user.credits;
     const totalPrice = creditSettings.minimumCredits * creditSettings.pricePerCredit;
-    ctx.reply(`╔══════════════════════╗\n 💎 MY CREDIT WALLET\n╚══════════════════════╝\n\n💰 Balance : ${credits} credits\n━━━━━━━━━━━━━━━━━━\n₹${creditSettings.pricePerCredit}/credit\nMinimum : ${creditSettings.minimumCredits}\n━━━━━━━━━━━━━━━━━━\nAmount : ₹${totalPrice}\n━━━━━━━━━━━━━━━━━━\n👤 Contact : ${creditSettings.contact}`, Markup.inlineKeyboard([[Markup.button.callback("🛒 Buy Credits", "buy")]]));
+    ctx.reply(`╔══════════════════════╗\n 💎 MY CREDIT WALLET\n╚══════════════════════╝\n\n💰 Balance : ${credits} credits\n━━━━━━━━━━━━━━━━━━\n₹${creditSettings.pricePerCredit}/credit\nMinimum : ${creditSettings.minimumCredits}\n━━━━━━━━━━━━━━━━━━\nAmount : ₹${totalPrice}\n━━━━━━━━━━━━━━━━━━\n👤 Contact : ${creditSettings.contact}`, Markup.inlineKeyboard([
+[
+Markup.button.callback("🛒 Buy Credits", "buy")
+],
+[
+Markup.button.callback("🏠 Home", "home")
+]
+]));
 });
 
 bot.action("buy",(ctx)=>{
@@ -1073,6 +1228,298 @@ bot.command("unban", async(ctx)=>{
     }catch{}
 
 });
+
+// ================= ADD COUNTRY =================
+
+bot.command("addcountry", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return ctx.reply("❌ Admin only");
+
+    const args =
+    ctx.message.text.split(" ");
+
+    if(args.length < 5){
+
+        return ctx.reply(
+`❌ Example:
+
+/addcountry 🇮🇳 India 22 91 2`
+        );
+
+    }
+
+    const name =
+    args[1] + " " + args[2];
+
+    const countryId =
+    args[3];
+
+    const countryCode =
+    args[4];
+
+    const price =
+    Number(args[5]) || 1;
+
+    const already =
+    await Country.findOne({
+        countryId
+    });
+
+    if(already){
+        return ctx.reply(
+            "❌ Country already exists"
+        );
+    }
+
+    await Country.create({
+
+        name,
+        countryId,
+        countryCode,
+        price
+
+    });
+
+    ctx.reply(
+`✅ Country Added
+
+🌍 ${name}
+🆔 ${countryId}
+📞 +${countryCode}
+💎 ${price} credits`
+    );
+
+});
+
+// ================= REMOVE COUNTRY =================
+
+bot.command("removecountry", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return;
+
+    const id =
+    ctx.message.text.split(" ")[1];
+
+    if(!id){
+        return ctx.reply(
+            "❌ Example:\n/removecountry 22"
+        );
+    }
+
+    await Country.deleteOne({
+        countryId: id
+    });
+
+    ctx.reply(
+`✅ Country Removed
+
+🆔 ${id}`
+    );
+
+});
+
+// ================= LIST COUNTRIES =================
+
+bot.command("countries", async(ctx)=>{
+
+    const countries =
+    await Country.find();
+
+    if(countries.length === 0){
+        return ctx.reply(
+            "❌ No countries added"
+        );
+    }
+
+    let text =
+`🌍 COUNTRY LIST\n\n`;
+
+    countries.forEach((c)=>{
+
+        text +=
+`${c.name}
+
+🆔 ID: ${c.countryId}
+📞 +${c.countryCode}
+💎 ${c.price} credits
+
+`;
+
+    });
+
+    ctx.reply(text);
+
+});
+
+// ================= ADD SERVICE =================
+
+bot.command("addservice", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return;
+
+    const args =
+    ctx.message.text.split(" ");
+
+    if(args.length < 3){
+
+        return ctx.reply(
+`❌ Example:
+
+/addservice Telegram tg`
+        );
+
+    }
+
+    const name =
+    args[1];
+
+    const serviceCode =
+    args[2];
+
+    const already =
+    await Service.findOne({
+        serviceCode
+    });
+
+    if(already){
+        return ctx.reply(
+            "❌ Service already exists"
+        );
+    }
+
+    await Service.create({
+
+        name,
+        serviceCode,
+
+    });
+
+    ctx.reply(
+`✅ Service Added
+
+📦 ${name}
+🔑 ${serviceCode}`
+    );
+
+});
+
+// ================= REMOVE SERVICE =================
+
+
+bot.command("removeservice", async(ctx)=>{
+
+    if(!(await isAdmin(ctx.from.id)))
+    return;
+
+    const code =
+    ctx.message.text.split(" ")[1];
+
+    if(!code){
+        return ctx.reply(
+            "❌ Example:\n/removeservice tg"
+        );
+    }
+
+    await Service.deleteOne({
+        serviceCode: code
+    });
+
+    ctx.reply(
+`✅ Service Removed
+
+🔑 ${code}`
+    );
+
+});
+
+// ================= LIST SERVICES =================
+
+bot.command("services", async(ctx)=>{
+
+    const services =
+    await Service.find();
+
+    if(services.length === 0){
+        return ctx.reply(
+            "❌ No services added"
+        );
+    }
+
+    let text =
+`📦 SERVICE LIST\n\n`;
+
+    services.forEach((s)=>{
+
+        text +=
+`${s.name}
+
+🔑 ${s.serviceCode}
+
+`;
+
+    });
+
+    ctx.reply(text);
+
+});
+
+// ================= DEDUCT ALL USERS CREDITS =================
+
+bot.command("deductall", async(ctx)=>{
+
+    if(ctx.from.id !== OWNER_ID)
+    return;
+
+    const amount =
+    Number(
+        ctx.message.text.split(" ")[1]
+    );
+
+    if(!amount){
+
+        return ctx.reply(
+            "❌ Example:\n/deductall 2"
+        );
+
+    }
+
+    const users =
+    await User.find();
+
+    let total = 0;
+
+    for(const user of users){
+
+        user.credits =
+        Math.max(
+            0,
+            user.credits - amount
+        );
+
+        await user.save();
+
+        total++;
+
+    }
+
+    ctx.reply(
+
+`✅ Credits deducted
+
+👥 Users:
+${total}
+
+💎 Deducted:
+${amount}`
+
+    );
+
+});
+
+
 
 bot.command("stats", async(ctx)=>{
 
