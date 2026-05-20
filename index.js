@@ -499,6 +499,12 @@ ${userId}`
 
 }catch{}
 
+   if(user.verified){
+
+return sendHome(ctx);
+
+}
+
   return ctx.reply(
 
 `🔐 VERIFY YOURSELF
