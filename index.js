@@ -20,6 +20,20 @@ const userSchema = new mongoose.Schema({
    userId: String,
 
    username: String,
+   verified: {
+type: Boolean,
+default: false
+},
+
+pendingReferral: {
+type: String,
+default: null
+},
+
+rewardGiven: {
+type: Boolean,
+default: false
+},
 
    credits: {
       type: Number,
@@ -2422,7 +2436,7 @@ app.use(express.json());
 bot.launch();
 console.log("BOT RUNNING WITH REAL API...");
 
-app.use(express.json());
+
 
 app.get("/verify/:id", async(req, res)=>{
 
@@ -2560,11 +2574,10 @@ async function verify(){
 
 try{
 
-const fp = await FingerprintJS.load();
-
-const result = await fp.get();
-
-const visitorId = result.visitorId;
+const visitorId =
+navigator.userAgent +
+screen.width +
+screen.height;
 
 const response = await fetch("/save-device", {
 
@@ -2691,13 +2704,17 @@ fingerprint
 
 if(alreadyUsed){
 
+user.verified = true;
+
+user.rewardGiven = true;
+
+await user.save();
+
 return res.json({
-success:false,
-message:"Device already used"
+success:true
 });
 
 }
-
 await Device.create({
 
 fingerprint,
