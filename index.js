@@ -597,11 +597,6 @@ await Service.countDocuments();
 const totalPages =
 Math.ceil(total / limit);
 
-const user =
-await User.findOne({
-userId: String(ctx.from.id)
-});
-
 let buttons = [];
 
 for(const s of services){
@@ -2422,6 +2417,8 @@ ${failed}`
 
 // ================= START BOT =================
 
+app.use(express.json());
+
 bot.launch();
 console.log("BOT RUNNING WITH REAL API...");
 
@@ -2498,7 +2495,6 @@ verify();
 
 });
 
-app.use(express.json());
 
 
 
