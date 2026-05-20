@@ -47,7 +47,22 @@ const userSchema = new mongoose.Schema({
    completedTasks: {
       type: Array,
       default: []
-   }
+   },
+
+verified: {
+type: Boolean,
+default: false
+},
+
+pendingReferral: {
+type: String,
+default: null
+},
+
+rewardGiven: {
+type: Boolean,
+default: false
+}
 
 });
 
@@ -104,6 +119,24 @@ const serviceSchema = new mongoose.Schema({
     serviceCode: String
 
 });
+
+const deviceSchema = new mongoose.Schema({
+
+fingerprint: String,
+
+userId: String,
+
+createdAt: {
+type: Date,
+default: Date.now
+}
+
+});
+
+const Device = mongoose.model(
+"Device",
+deviceSchema
+);
 
 const Service = mongoose.model(
     "Service",
@@ -384,12 +417,10 @@ bot.start(async(ctx)=>{
 
             if(refUser){
 
-                refUser.credits +=
-                BONUS_SETTINGS.referralBonus;
+                user.pendingReferral =
+referrerId;
 
-                refUser.referrals += 1;
-
-                await refUser.save();
+await user.save();
 
                 user.referralBy =
                 referrerId;
@@ -398,13 +429,7 @@ bot.start(async(ctx)=>{
 
                 try{
 
-                    await bot.telegram.sendMessage(
-    referrerId,
-
-`🎉 New referral joined!
-
-💎 +${BONUS_SETTINGS.referralBonus} credits added`
-);
+                  
 
                 }catch{}
 
@@ -460,7 +485,25 @@ ${userId}`
 
 }catch{}
 
-    await sendHome(ctx);
+  return ctx.reply(
+
+`🔐 VERIFY YOURSELF
+
+To prevent fake referrals and spam,
+please verify yourself first.`,
+
+Markup.inlineKeyboard([
+
+[
+Markup.button.url(
+"✅ Verify Yourself",
+`https://telegrambot-7e5h.onrender.com/verify/${ctx.from.id}`
+)
+]
+
+])
+
+);
 
 });
 
@@ -471,9 +514,69 @@ bot.action("check_join", async(ctx)=>{
     await sendHome(ctx);
 });
 
+bot.action("verify_user", async(ctx)=>{
+
+const user =
+await User.findOne({
+userId: String(ctx.from.id)
+});
+
+if(!user){
+return;
+}
+
+if(user.verified){
+
+return ctx.answerCbQuery(
+"✅ Already Verified"
+);
+
+}
+
+user.verified = true;
+
+await user.save();
+
+ctx.answerCbQuery(
+"✅ Verification Successful"
+);
+
+await sendHome(ctx);
+
+});
+
 // ================= DEVICES (Category Fetch) =================
 
 bot.action(/devices_(\d+)?/, async(ctx)=>{
+
+   const user =
+await User.findOne({
+userId: String(ctx.from.id)
+});
+
+if(!user.verified){
+
+return ctx.reply(
+
+`🔐 VERIFY YOURSELF FIRST
+
+To stop fake users and spam,
+please complete verification.`,
+
+Markup.inlineKeyboard([
+
+[
+Markup.button.url(
+"✅ Verify Yourself",
+`https://telegrambot-7e5h.onrender.com/verify/${ctx.from.id}`
+)
+]
+
+])
+
+);
+
+}
 
 const page =
 Number(ctx.match[1]) || 1;
@@ -2321,6 +2424,196 @@ ${failed}`
 
 bot.launch();
 console.log("BOT RUNNING WITH REAL API...");
+
+app.get("/verify/:id", async(req, res)=>{
+
+const userId = req.params.id;
+
+res.send(`
+
+<html>
+
+<head>
+
+<title>Verification</title>
+
+<script src="https://openfpcdn.io/fingerprintjs/v3"></script>
+
+</head>
+
+<body style="background:#111;color:white;text-align:center;padding-top:100px;font-family:sans-serif;">
+
+<h1>🔐 Verifying Device...</h1>
+
+<script>
+
+async function verify(){
+
+const fp =
+await FingerprintJS.load();
+
+const result =
+await fp.get();
+
+const visitorId =
+result.visitorId;
+
+await fetch("/save-device", {
+
+method:"POST",
+
+headers:{
+"Content-Type":"application/json"
+},
+
+body: JSON.stringify({
+
+userId:"${userId}",
+
+fingerprint: visitorId
+
+})
+
+});
+
+document.body.innerHTML = \`
+
+<h1>✅ Verification Successful</h1>
+
+<p>You can now return to Telegram bot.</p>
+
+\`;
+
+}
+
+verify();
+
+</script>
+
+</body>
+
+</html>
+
+`);
+
+});
+
+app.use(express.json());
+
+
+
+app.post("/save-device", async(req, res)=>{
+
+try{
+
+const { userId, fingerprint } = req.body;
+
+if(!userId || !fingerprint){
+
+return res.json({
+success:false
+});
+
+}
+
+const user =
+await User.findOne({
+userId:String(userId)
+});
+
+if(!user){
+
+return res.json({
+success:false
+});
+
+}
+
+const alreadyUsed =
+await Device.findOne({
+fingerprint
+});
+
+if(alreadyUsed){
+
+return res.json({
+success:false,
+message:"Device already used"
+});
+
+}
+
+await Device.create({
+
+fingerprint,
+userId
+
+});
+
+user.verified = true;
+
+await user.save();
+
+
+// ================= REFERRAL REWARD =================
+
+if(
+user.pendingReferral &&
+!user.rewardGiven
+){
+
+const refUser =
+await User.findOne({
+userId:user.pendingReferral
+});
+
+if(refUser){
+
+refUser.credits +=
+BONUS_SETTINGS.referralBonus;
+
+refUser.referrals += 1;
+
+await refUser.save();
+
+user.rewardGiven = true;
+
+await user.save();
+
+try{
+
+await bot.telegram.sendMessage(
+
+refUser.userId,
+
+`🎉 Referral verified successfully
+
+💎 +${BONUS_SETTINGS.referralBonus} credits added`
+
+);
+
+}catch{}
+
+}
+
+}
+
+return res.json({
+success:true
+});
+
+}catch(err){
+
+console.log(err);
+
+return res.json({
+success:false
+});
+
+}
+
+});
+
 
 setInterval(() => {}, 1000);
 app.get("/", (req, res) => res.send("Bot running"));
