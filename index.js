@@ -715,7 +715,16 @@ bot.action(/select_country_(.+)_(.+)_(.+)_(.+)/, async (ctx) => {
 
         // ================= CREDIT CHECK =================
         if (user.credits < price) {
-            return ctx.answerCbQuery("❌ No credits left", { show_alert: true });
+            return ctx.answerCbQuery(
+
+`❌ Not enough credits
+
+💎 Required: ${price}
+💰 Balance: ${user.credits}`,
+
+{ show_alert: true }
+
+);
         }
 
         ctx.answerCbQuery("📡 Searching Number...");
