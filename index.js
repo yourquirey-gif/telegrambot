@@ -2422,40 +2422,151 @@ app.use(express.json());
 bot.launch();
 console.log("BOT RUNNING WITH REAL API...");
 
+app.use(express.json());
+
 app.get("/verify/:id", async(req, res)=>{
 
 const userId = req.params.id;
 
 res.send(`
 
+<!DOCTYPE html>
 <html>
 
 <head>
 
 <title>Verification</title>
 
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <script src="https://openfpcdn.io/fingerprintjs/v3"></script>
+
+<style>
+
+body{
+background:#070b14;
+color:white;
+font-family:sans-serif;
+display:flex;
+justify-content:center;
+align-items:center;
+height:100vh;
+margin:0;
+overflow:hidden;
+}
+
+.box{
+text-align:center;
+padding:30px;
+width:90%;
+max-width:400px;
+background:rgba(255,255,255,0.05);
+border:1px solid rgba(255,255,255,0.1);
+border-radius:25px;
+backdrop-filter:blur(10px);
+box-shadow:0 0 30px rgba(0,255,255,0.15);
+animation:fadeIn 0.5s ease;
+}
+
+.loader{
+width:90px;
+height:90px;
+border-radius:50%;
+border:5px solid rgba(255,255,255,0.1);
+border-top:5px solid #00ffe5;
+margin:auto;
+animation:spin 1s linear infinite;
+box-shadow:0 0 25px #00ffe5;
+}
+
+.scan{
+margin-top:25px;
+font-size:20px;
+font-weight:bold;
+animation:pulse 1s infinite;
+}
+
+.text{
+margin-top:15px;
+opacity:0.8;
+font-size:14px;
+line-height:1.5;
+}
+
+.success{
+font-size:60px;
+animation:pop 0.5s ease;
+}
+
+@keyframes spin{
+100%{
+transform:rotate(360deg);
+}
+}
+
+@keyframes pulse{
+0%,100%{
+opacity:1;
+}
+50%{
+opacity:0.4;
+}
+}
+
+@keyframes fadeIn{
+from{
+opacity:0;
+transform:scale(0.9);
+}
+to{
+opacity:1;
+transform:scale(1);
+}
+}
+
+@keyframes pop{
+0%{
+transform:scale(0);
+}
+100%{
+transform:scale(1);
+}
+}
+
+</style>
 
 </head>
 
-<body style="background:#111;color:white;text-align:center;padding-top:100px;font-family:sans-serif;">
+<body>
 
-<h1>🔐 Verifying Device...</h1>
+<div class="box">
+
+<div class="loader"></div>
+
+<div class="scan">
+🔐 Verifying Device...
+</div>
+
+<div class="text">
+Checking secure fingerprint<br>
+Please wait...
+</div>
+
+</div>
 
 <script>
 
 async function verify(){
 
-const fp =
-await FingerprintJS.load();
+try{
 
-const result =
-await fp.get();
+const fp = await FingerprintJS.load();
 
-const visitorId =
-result.visitorId;
+const result = await fp.get();
 
-await fetch("/save-device", {
+const visitorId = result.visitorId;
+
+const response = await fetch("/save-device", {
 
 method:"POST",
 
@@ -2473,28 +2584,76 @@ fingerprint: visitorId
 
 });
 
+const data = await response.json();
+
+if(data.success){
+
 document.body.innerHTML = \`
 
-<h1>✅ Verification Successful</h1>
+<div class="box">
+
+<div class="success">✅</div>
+
+<h1>Verification Successful</h1>
 
 <p>You can now return to Telegram bot.</p>
+
+</div>
+
+\`;
+
+}else{
+
+document.body.innerHTML = \`
+
+<div class="box">
+
+<div class="success">⚠️</div>
+
+<h2>\${data.message || "Verification Failed"}</h2>
+
+<p>Try another device/browser.</p>
+
+</div>
 
 \`;
 
 }
 
+}catch(err){
+
+document.body.innerHTML = \`
+
+<div class="box">
+
+<div class="success">❌</div>
+
+<h2>Verification Error</h2>
+
+<p>Please try again later.</p>
+
+</div>
+
+\`;
+
+console.log(err);
+
+}
+
+}
+
+window.onload = () => {
 verify();
+};
 
 </script>
 
 </body>
-
 </html>
 
 `);
 
 });
-
 
 
 
