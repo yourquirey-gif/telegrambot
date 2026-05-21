@@ -25,6 +25,16 @@ type: Boolean,
 default: false
 },
 
+activeOrder: {
+type: Boolean,
+default: false
+},
+
+totalOtp: {
+type: Number,
+default: 0
+},   
+   
 pendingReferral: {
 type: String,
 default: null
@@ -37,7 +47,7 @@ default: false
 
    credits: {
       type: Number,
-      default: 3,
+      default: 1,
    min: 0
    },
 
@@ -140,7 +150,8 @@ const Service = mongoose.model(
     "Service",
     serviceSchema
 );
-
+const cooldowns = new Map();
+const stockCache = new Map();
 
 async function loadDefaultForce(){
 
@@ -359,7 +370,8 @@ if(!user){
     ...Markup.inlineKeyboard([
         [Markup.button.callback("🟢 Get Number", "devices_1")],
         [Markup.button.callback("💎 My Credits", "credits"), Markup.button.callback("🎁 Tasks", "tasks")],
-        [Markup.button.callback("👥 Referral", "referral"), Markup.button.callback("🛒 Buy Credits", "buy")]
+        [Markup.button.callback("👥 Referral", "referral"), Markup.button.callback("🛒 Buy Credits", "buy")],
+        [Markup.button.callback("👤 Profile", "profile")]
     ])
 });
 }
@@ -708,17 +720,76 @@ const totalPages =
 Math.ceil(total / limit);
 
 let buttons = [];
-
+   
 for(let i = 0; i < countries.length; i += 2){
 
 let row = [];
 
 const c1 = countries[i];
 
+let stock1 = "0";
+
+const cacheKey1 =
+`${service}_${c1.countryId}`;
+
+if(stockCache.has(cacheKey1)){
+
+const cached =
+stockCache.get(cacheKey1);
+
+if(Date.now() < cached.expire){
+
+stock1 = cached.stock;
+
+}else{
+
+stockCache.delete(cacheKey1);
+
+}
+
+}
+
+if(stock1 === "0"){
+
+try{
+
+const stockData1 =
+await callVakApi(
+'getNumbersStatus',
+{
+country: c1.countryId
+}
+);
+
+if(
+stockData1 &&
+typeof stockData1 === "object"
+){
+
+stock1 =
+stockData1[
+`${service}_0`
+] || "0";
+
+stockCache.set(
+cacheKey1,
+{
+stock: stock1,
+expire:
+Date.now() + 30000
+}
+);
+
+}
+
+}catch{}
+
+}
+
 row.push(
 
 Markup.button.callback(
-`${c1.name} • 💎 ${c1.servicePrices[service] || 1}`,
+`${c1.name} • 💎 ${c1.servicePrices[service] || 1} • 📦 ${stock1}`,
 `select_country_${service}_${c1.countryId}_${c1.countryCode}_${c1.servicePrices[service] || 1}`
 )
 
@@ -728,10 +799,69 @@ if(countries[i + 1]){
 
 const c2 = countries[i + 1];
 
+let stock2 = "0";
+
+const cacheKey2 =
+`${service}_${c2.countryId}`;
+
+if(stockCache.has(cacheKey2)){
+
+const cached =
+stockCache.get(cacheKey2);
+
+if(Date.now() < cached.expire){
+
+stock2 = cached.stock;
+
+}else{
+
+stockCache.delete(cacheKey2);
+
+}
+
+}
+
+if(stock2 === "0"){
+
+try{
+
+const stockData2 =
+await callVakApi(
+'getNumbersStatus',
+{
+country: c2.countryId
+}
+);
+
+if(
+stockData2 &&
+typeof stockData2 === "object"
+){
+
+stock2 =
+stockData2[
+`${service}_0`
+] || "0";
+
+stockCache.set(
+cacheKey2,
+{
+stock: stock2,
+expire:
+Date.now() + 30000
+}
+);
+
+}
+
+}catch{}
+
+}
+
 row.push(
 
 Markup.button.callback(
-`${c2.name} • 💎 ${c2.servicePrices[service] || 1}`,
+`${c2.name} • 💎 ${c2.servicePrices[service] || 1} • 📦 ${stock2}`,
 `select_country_${service}_${c2.countryId}_${c2.countryCode}_${c2.servicePrices[service] || 1}`
 )
 
@@ -796,6 +926,40 @@ Markup.inlineKeyboard(buttons)
 
 // ================= BUY NUMBER (DYNAMIC FOR ALL COUNTRIES - FIXED) =================
 bot.action(/select_country_(.+)_(.+)_(.+)_(.+)/, async (ctx) => {
+   const userId = String(ctx.from.id);
+
+const now = Date.now();
+
+if(cooldowns.has(userId)){
+
+const expiration =
+cooldowns.get(userId);
+
+if(now < expiration){
+
+const left =
+Math.ceil(
+(expiration - now) / 1000
+);
+
+return ctx.answerCbQuery(
+
+`⏳ Please wait ${left}s`,
+
+{
+show_alert:true
+}
+
+);
+
+}
+
+}
+
+cooldowns.set(
+userId,
+now + 5000
+);
     try {
         let service = ctx.match[1];
         let country = ctx.match[2];
@@ -817,6 +981,18 @@ bot.action(/select_country_(.+)_(.+)_(.+)_(.+)/, async (ctx) => {
         }
 
         // ================= CREDIT CHECK =================
+
+       if(user.activeOrder){
+
+return ctx.reply(
+
+`⚠️ You already have an active order.
+
+Please complete or cancel it first.`
+
+);
+
+}
         if (user.credits < price) {
             return ctx.answerCbQuery(
 
@@ -849,6 +1025,9 @@ bot.action(/select_country_(.+)_(.+)_(.+)_(.+)/, async (ctx) => {
         if (responseData && typeof responseData === "string" && responseData.includes("ACCESS_NUMBER")) {
             const parts = responseData.split(":");
             const orderId = parts[1];
+           user.activeOrder = true;
+
+await user.save();
             const phoneNumber = parts[2];
 
             return ctx.reply(
@@ -938,11 +1117,12 @@ bot.action(/api_otp_(.+)_(.+)_(.+)/, async (ctx) => {
 
     if (responseData && typeof responseData === 'string' && responseData.includes('STATUS_OK')) {
         const smsCode = responseData.split(':')[1]; 
-
+user.totalOtp += 1;
         user.credits = Math.max(0, user.credits - price);
+       user.activeOrder = false;
         await user.save();
-
-        ctx.reply(`╔══════════════════════╗\n 📩 NEW OTP RECEIVED\n╚══════════════════════╝\n\n🔐 OTP : <code>${smsCode}</code>\n\n💎 -1 Credit Deducted\n💰 Remaining : ${user.credits} credits`, { parse_mode: "HTML" });
+       
+        ctx.reply(`╔══════════════════════╗\n 📩 NEW OTP RECEIVED\n╚══════════════════════╝\n\n🔐 OTP : <code>${smsCode}</code>\n\n💎 -${price} Credit Deducted\n💰 Remaining : ${user.credits} credits`, { parse_mode: "HTML" });
     } else if (responseData === 'STATUS_WAIT_CODE') {
         ctx.reply("⚠️ No OTP yet. Status: Waiting for SMS...", Markup.inlineKeyboard([[Markup.button.callback("🔄 Refresh Again", `api_otp_${orderId}_${service}_${price}`)]]));
     } else {
@@ -953,6 +1133,7 @@ bot.action(/api_otp_(.+)_(.+)_(.+)/, async (ctx) => {
 
 
 // ================= CANCEL ORDER (FIXED ACTION) =================
+
 bot.action(/cancel_(.+)/, async (ctx) => {
     const orderId = ctx.match[1];
     
@@ -965,11 +1146,36 @@ bot.action(/cancel_(.+)/, async (ctx) => {
 
     ctx.answerCbQuery("Processing...");
     
-    if (responseData && typeof responseData === 'string' && responseData.includes('ACCESS_CANCEL')) {
-        ctx.reply("❌ Order has been cancelled successfully.");
-    } else {
-        ctx.reply("⚠️ Could not cancel order (It might have expired or already processed).");
-    }
+ if (
+responseData &&
+typeof responseData === 'string' &&
+responseData.includes('ACCESS_CANCEL')
+){
+
+const user =
+await User.findOne({
+userId: String(ctx.from.id)
+});
+
+if(user){
+
+user.activeOrder = false;
+
+await user.save();
+
+}
+
+ctx.reply(
+"❌ Order has been cancelled successfully."
+);
+
+}else{
+
+ctx.reply(
+"⚠️ Could not cancel order (It might have expired or already processed)."
+);
+
+}
     await sendHome(ctx);
 });
 
@@ -1052,6 +1258,59 @@ user.completedTasks.push(taskId);
 
 await user.save();
     ctx.reply(`✅ Task completed\n💎 +${task.credits} credits added`);
+});
+
+bot.action("profile", async(ctx)=>{
+
+const user =
+await User.findOne({
+userId: String(ctx.from.id)
+});
+
+ctx.reply(
+
+`╔══════════════════════╗
+ 👤 USER PROFILE
+╚══════════════════════╝
+
+🆔 User ID :
+<code>${user.userId}</code>
+
+💎 Credits :
+${user.credits}
+
+📦 Total OTP :
+${user.totalOtp || 0}
+
+👥 Referrals :
+${user.referrals}
+
+✅ Verified :
+${user.verified ? "Yes" : "No"}
+
+📅 Joined :
+${user.joined}
+
+━━━━━━━━━━━━━━━━━━`,
+
+{
+parse_mode:"HTML",
+
+...Markup.inlineKeyboard([
+
+[
+Markup.button.callback(
+"🏠 Home",
+"home"
+)
+]
+
+])
+
+}
+
+);
+
 });
 
 bot.action("home", async(ctx)=>{
