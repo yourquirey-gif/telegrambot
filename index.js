@@ -218,7 +218,7 @@ const LOG_CHANNEL = "@otpadminlogchannel";
 let creditSettings = {
     pricePerCredit: 5,
     minimumCredits: 10,
-    contact: "@YOUR_USERNAME"
+    contact: "@Quiressupportotpbot"
        };
 
    const BONUS_SETTINGS = {
