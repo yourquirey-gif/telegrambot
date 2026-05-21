@@ -627,6 +627,13 @@ return ctx.answerCbQuery(
 }
 
 user.verified = true;
+   user.ipHash = ipHash;
+
+user.browserInfo = browser;
+
+user.deviceType = deviceType;
+
+user.vpnDetected = suspiciousVpn;
 
 await user.save();
 
