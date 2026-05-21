@@ -2892,7 +2892,6 @@ verify();
 });
 
 
-
 app.post("/save-device", async(req, res)=>{
 
 try{
@@ -2981,105 +2980,6 @@ user.ipHash = ipHash;
 user.browserInfo = browser;
 user.deviceType = deviceType;
 user.vpnDetected = suspiciousVpn;
-user.verified = true;
-
-await user.save();
-
-return res.json({
-success:true
-});
-
-}catch(err){
-
-console.log(err);
-
-return res.json({
-success:false
-});
-
-}
-
-});
-
-}
-   
-
-const crypto = require("crypto");
-
-const rawIp =
-req.headers["x-forwarded-for"] ||
-req.socket.remoteAddress ||
-"unknown";
-
-const ipHash =
-crypto
-.createHash("sha256")
-.update(rawIp)
-.digest("hex");
-
-   const suspiciousVpn =
-rawIp.includes("proxy") ||
-rawIp.includes("vpn");
-   
-const user =
-await User.findOne({
-userId:String(userId)
-});
-
-if(!user){
-
-return res.json({
-success:false
-});
-
-}
-
-const alreadyUsed =
-await Device.findOne({
-fingerprint
-});
-
-if(
-alreadyUsed &&
-alreadyUsed.userId !== String(userId)
-){
-   
-   user.ipHash = ipHash;
-
-user.browserInfo = browser;
-
-user.deviceType = deviceType;
-
-user.vpnDetected =
-suspiciousVpn;
-user.verified = true;
-
-user.rewardGiven = true;
-
-await user.save();
-
-return res.json({
-success:true
-});
-
-}
-await Device.create({
-
-fingerprint,
-
-userId,
-
-ipHash,
-
-browserInfo: browser,
-
-deviceType,
-
-vpnDetected:
-suspiciousVpn
-
-});
-
 user.verified = true;
 
 await user.save();
