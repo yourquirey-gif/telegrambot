@@ -3031,7 +3031,17 @@ success:true
 await Device.create({
 
 fingerprint,
-userId
+
+userId,
+
+ipHash,
+
+browserInfo: browser,
+
+deviceType,
+
+vpnDetected:
+suspiciousVpn
 
 });
 
