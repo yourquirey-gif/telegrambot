@@ -550,47 +550,7 @@ return sendHome(ctx);
    
 });
 
-bot.action("verify_user", async(ctx)=>{
 
-const user =
-await User.findOne({
-userId: String(ctx.from.id)
-});
-
-if(!user){
-return;
-}
-
-if(
-user.verified &&
-user.ipHash &&
-user.browserInfo
-){
-
-return ctx.answerCbQuery(
-"✅ Already Verified"
-);
-
-}
-
-user.verified = true;
-   user.ipHash = ipHash;
-
-user.browserInfo = browser;
-
-user.deviceType = deviceType;
-
-user.vpnDetected = suspiciousVpn;
-
-await user.save();
-
-ctx.answerCbQuery(
-"✅ Verification Successful"
-);
-
-await sendHome(ctx);
-
-});
 
 // ================= DEVICES (Category Fetch) =================
 
