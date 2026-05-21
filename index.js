@@ -2937,6 +2937,8 @@ app.post("/save-device", async(req, res)=>{
 
 try{
 
+const crypto = require("crypto");
+
 const {
 userId,
 fingerprint,
@@ -2948,6 +2950,95 @@ if(!userId || !fingerprint){
 
 return res.json({
 success:false
+});
+
+}
+
+const rawIp =
+(req.headers["x-forwarded-for"] || "")
+.toString()
+.split(",")[0]
+.trim() ||
+req.socket.remoteAddress ||
+"unknown";
+
+const ipHash =
+crypto
+.createHash("sha256")
+.update(rawIp)
+.digest("hex");
+
+const suspiciousVpn =
+rawIp.toLowerCase().includes("vpn") ||
+rawIp.toLowerCase().includes("proxy");
+
+const user =
+await User.findOne({
+userId:String(userId)
+});
+
+if(!user){
+
+return res.json({
+success:false
+});
+
+}
+
+const alreadyUsed =
+await Device.findOne({
+fingerprint
+});
+
+if(
+alreadyUsed &&
+alreadyUsed.userId !== String(userId)
+){
+
+return res.json({
+success:false,
+message:"Device already used by another account"
+});
+
+}
+
+if(!alreadyUsed){
+
+await Device.create({
+
+fingerprint,
+userId,
+ipHash,
+browserInfo: browser,
+deviceType,
+vpnDetected: suspiciousVpn
+
+});
+
+}
+
+user.ipHash = ipHash;
+user.browserInfo = browser;
+user.deviceType = deviceType;
+user.vpnDetected = suspiciousVpn;
+user.verified = true;
+
+await user.save();
+
+return res.json({
+success:true
+});
+
+}catch(err){
+
+console.log(err);
+
+return res.json({
+success:false
+});
+
+}
+
 });
 
 }
