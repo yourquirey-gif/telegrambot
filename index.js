@@ -518,9 +518,15 @@ ${userId}`
 
 }catch{}
 
-   if(user.verified){
+ if(
+user.verified &&
+user.ipHash &&
+user.browserInfo
+){
 
 return sendHome(ctx);
+
+ }
 
 }
 
