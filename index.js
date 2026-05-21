@@ -547,6 +547,8 @@ Markup.button.url(
 }
 
 return sendHome(ctx);
+   
+});
 
 bot.action("check_join", async(ctx)=>{
     const notJoined = await checkForceJoin(ctx);
