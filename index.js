@@ -3001,7 +3001,25 @@ const alreadyUsed =
 await Device.findOne({
 fingerprint
 });
+   
+const sameIp =
+await User.findOne({
+ipHash,
+verified:true
+});
 
+if(
+sameIp &&
+sameIp.userId !== String(userId)
+){
+
+return res.json({
+success:false,
+message:"Multiple accounts detected"
+});
+
+}
+   
 if(
 alreadyUsed &&
 alreadyUsed.userId !== String(userId)
