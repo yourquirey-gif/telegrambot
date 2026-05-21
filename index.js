@@ -550,7 +550,60 @@ return sendHome(ctx);
    
 });
 
+bot.action("check_join", async(ctx)=>{
 
+const notJoined =
+await checkForceJoin(ctx);
+
+if(notJoined.length > 0){
+
+return ctx.answerCbQuery(
+"❌ Join all channels first",
+{
+show_alert:true
+}
+);
+
+}
+
+const user =
+await User.findOne({
+userId:String(ctx.from.id)
+});
+
+if(
+!user.verified ||
+!user.ipHash ||
+!user.browserInfo
+){
+
+return ctx.reply(
+
+`🔐 VERIFY YOURSELF
+
+To prevent fake referrals and spam,
+please verify yourself first.`,
+
+Markup.inlineKeyboard([
+
+[
+Markup.button.url(
+"✅ Verify Yourself",
+`https://telegrambot-7e5h.onrender.com/verify/${ctx.from.id}`
+)
+]
+
+])
+
+);
+
+}
+
+ctx.answerCbQuery("✅ Verification complete");
+
+return sendHome(ctx);
+
+});
 
 // ================= DEVICES (Category Fetch) =================
 
