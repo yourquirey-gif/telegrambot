@@ -519,18 +519,12 @@ ${userId}`
 }catch{}
 
  if(
-user.verified &&
-user.ipHash &&
-user.browserInfo
+!user.verified ||
+!user.ipHash ||
+!user.browserInfo
 ){
 
-return sendHome(ctx);
-
- }
-
-}
-
-  return ctx.reply(
+return ctx.reply(
 
 `🔐 VERIFY YOURSELF
 
@@ -550,7 +544,9 @@ Markup.button.url(
 
 );
 
-});
+}
+
+return sendHome(ctx);
 
 bot.action("check_join", async(ctx)=>{
     const notJoined = await checkForceJoin(ctx);
@@ -570,7 +566,11 @@ if(!user){
 return;
 }
 
-if(user.verified){
+if(
+!user.verified ||
+!user.ipHash ||
+!user.browserInfo
+){
 
 return ctx.answerCbQuery(
 "✅ Already Verified"
