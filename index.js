@@ -2981,6 +2981,10 @@ crypto
 .createHash("sha256")
 .update(rawIp)
 .digest("hex");
+
+   const suspiciousVpn =
+rawIp.includes("proxy") ||
+rawIp.includes("vpn");
    
 const user =
 await User.findOne({
@@ -3000,17 +3004,16 @@ await Device.findOne({
 fingerprint
 });
 
-if(alreadyUsed){
+if(
+alreadyUsed &&
+alreadyUsed.userId !== String(userId)
+){
    
    user.ipHash = ipHash;
 
 user.browserInfo = browser;
 
 user.deviceType = deviceType;
-
-const suspiciousVpn =
-rawIp.includes("proxy") ||
-rawIp.includes("vpn");
 
 user.vpnDetected =
 suspiciousVpn;
