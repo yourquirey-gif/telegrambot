@@ -1,5 +1,6 @@
 const express = require("express");
 const app = express();
+app.use(express.json());
 
 const { Telegraf, Markup } = require("telegraf");
 const axios = require("axios");
@@ -24,6 +25,26 @@ const userSchema = new mongoose.Schema({
 type: Boolean,
 default: false
 },
+
+ipHash: {
+type: String,
+default: null
+},
+
+browserInfo: {
+type: String,
+default: null
+},
+
+deviceType: {
+type: String,
+default: null
+},
+
+vpnDetected: {
+type: Boolean,
+default: false
+},   
 
 activeOrder: {
 type: Boolean,
@@ -2842,7 +2863,13 @@ body: JSON.stringify({
 
 userId:"${userId}",
 
-fingerprint: visitorId
+fingerprint: visitorId,
+
+browser: navigator.userAgent,
+
+deviceType: /Mobi|Android/i.test(navigator.userAgent)
+? "Mobile"
+: "Desktop"
 
 })
 
@@ -2925,7 +2952,12 @@ app.post("/save-device", async(req, res)=>{
 
 try{
 
-const { userId, fingerprint } = req.body;
+const {
+userId,
+fingerprint,
+browser,
+deviceType
+} = req.body;
 
 if(!userId || !fingerprint){
 
@@ -2934,7 +2966,20 @@ success:false
 });
 
 }
+   
+const crypto = require("crypto");
 
+const rawIp =
+req.headers["x-forwarded-for"] ||
+req.socket.remoteAddress ||
+"unknown";
+
+const ipHash =
+crypto
+.createHash("sha256")
+.update(rawIp)
+.digest("hex");
+   
 const user =
 await User.findOne({
 userId:String(userId)
@@ -2954,7 +2999,19 @@ fingerprint
 });
 
 if(alreadyUsed){
+   
+   user.ipHash = ipHash;
 
+user.browserInfo = browser;
+
+user.deviceType = deviceType;
+
+const suspiciousVpn =
+rawIp.includes("proxy") ||
+rawIp.includes("vpn");
+
+user.vpnDetected =
+suspiciousVpn;
 user.verified = true;
 
 user.rewardGiven = true;
