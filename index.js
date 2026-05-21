@@ -62,22 +62,6 @@ default: false
       type: Array,
       default: []
    },
-
-verified: {
-type: Boolean,
-default: false
-},
-
-pendingReferral: {
-type: String,
-default: null
-},
-
-rewardGiven: {
-type: Boolean,
-default: false
-}
-
 });
 
 const User = mongoose.model(
@@ -688,7 +672,8 @@ Markup.inlineKeyboard(buttons)
 
 bot.action(/buy_srv_(.+)_(\d+)?/, async (ctx) => {
 
-const service = ctx.match[1];
+const service =
+String(ctx.match[1]).toLowerCase();
 
 const page =
 Number(ctx.match[2]) || 1;
@@ -2580,10 +2565,11 @@ async function verify(){
 
 try{
 
-const visitorId =
-navigator.userAgent +
-screen.width +
-screen.height;
+const fp = await FingerprintJS.load();
+
+const result = await fp.get();
+
+const visitorId = result.visitorId;
 
 const response = await fetch("/save-device", {
 
