@@ -567,9 +567,9 @@ return;
 }
 
 if(
-!user.verified ||
-!user.ipHash ||
-!user.browserInfo
+user.verified &&
+user.ipHash &&
+user.browserInfo
 ){
 
 return ctx.answerCbQuery(
