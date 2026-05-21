@@ -149,24 +149,6 @@ const serviceSchema = new mongoose.Schema({
 
 });
 
-const deviceSchema = new mongoose.Schema({
-
-fingerprint: String,
-
-userId: String,
-
-createdAt: {
-type: Date,
-default: Date.now
-}
-
-});
-
-const Device = mongoose.model(
-"Device",
-deviceSchema
-);
-
 const Service = mongoose.model(
     "Service",
     serviceSchema
