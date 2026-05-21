@@ -598,31 +598,6 @@ bot.action(/devices_(\d+)?/, async(ctx)=>{
 await User.findOne({
 userId: String(ctx.from.id)
 });
-
-if(!user.verified){
-
-return ctx.reply(
-
-`🔐 VERIFY YOURSELF FIRST
-
-To stop fake users and spam,
-please complete verification.`,
-
-Markup.inlineKeyboard([
-
-[
-Markup.button.url(
-"✅ Verify Yourself",
-`https://telegrambot-7e5h.onrender.com/verify/${ctx.from.id}`
-)
-]
-
-])
-
-);
-
-}
-
 const page =
 Number(ctx.match[1]) || 1;
 
