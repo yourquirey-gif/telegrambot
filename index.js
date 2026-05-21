@@ -171,6 +171,26 @@ const Service = mongoose.model(
     "Service",
     serviceSchema
 );
+const deviceSchema = new mongoose.Schema({
+
+    userId: String,
+
+    fingerprint: String,
+
+    ipHash: String,
+
+    browserInfo: String,
+
+    deviceType: String,
+
+    vpnDetected: Boolean
+
+});
+
+const Device = mongoose.model(
+    "Device",
+    deviceSchema
+);
 const cooldowns = new Map();
 const stockCache = new Map();
 
