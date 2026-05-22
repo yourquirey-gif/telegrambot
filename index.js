@@ -2921,7 +2921,7 @@ document.body.innerHTML = "
 
 <div class="success">⚠️</div>
 
-<h2>${data.message || "Verification Failed"}</h2>
+<h2>Verification Failed</h2>
 
 <p>Try another device/browser.</p>
 
