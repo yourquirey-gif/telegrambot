@@ -1791,7 +1791,7 @@ tg = service code
 }
 
 const service =
-args[1];
+String(args[1]).toLowerCase();
 
 const countryId =
 args[2];
