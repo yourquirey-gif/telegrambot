@@ -2881,8 +2881,29 @@ const data = await response.json();
 console.log(data);
 if(data.success){
 
-document.body.innerHTML = \`
+if(data.multiAccount){
 
+document.body.innerHTML = `
+
+<div class="box">
+
+<div class="success">⚠️</div>
+
+<h2>Multiple Accounts Detected</h2>
+
+<p>
+You can still use the bot,<br>
+but referral rewards are disabled.
+</p>
+
+</div>
+
+`;
+
+return;
+
+}
+document.body.innerHTML = `
 <div class="box">
 
 <div class="success">✅</div>
@@ -3012,27 +3033,23 @@ ipHash,
 verified:true
 });
 
+let multiAccount = false;
+
 if(
 sameIp &&
 sameIp.userId !== String(userId)
 ){
 
-return res.json({
-success:false,
-message:"Multiple accounts detected"
-});
+multiAccount = true;
 
 }
-   
+
 if(
 alreadyUsed &&
 alreadyUsed.userId !== String(userId)
 ){
 
-return res.json({
-success:false,
-message:"Device already used by another account"
-});
+multiAccount = true;
 
 }
 
@@ -3064,7 +3081,8 @@ await user.save();
 
 if(
 user.pendingReferral &&
-!user.rewardGiven
+!user.rewardGiven &&
+!multiAccount
 ){
 
 const refUser =
@@ -3104,7 +3122,15 @@ refUser.userId,
 }
 
 return res.json({
-success:true
+
+success:true,
+
+multiAccount,
+
+message: multiAccount
+? "Multiple accounts detected. Referral rewards disabled."
+: "Verification successful"
+
 });
 
 }catch(err){
