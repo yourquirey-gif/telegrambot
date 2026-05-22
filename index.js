@@ -1,6 +1,9 @@
 const express = require("express");
+const cors = require("cors");
 const app = express();
+app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 const { Telegraf, Markup } = require("telegraf");
 const axios = require("axios");
@@ -2723,7 +2726,7 @@ res.send(`
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<script src="https://openfpcdn.io/fingerprintjs/v3"></script>
+<script async src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
 
 <style>
 
@@ -2849,7 +2852,7 @@ const fp = await FingerprintJS.load();
 const result = await fp.get();
 
 const visitorId = result.visitorId;
-
+console.log("Sending verification request...");
 const response = await fetch("https://telegrambot-7e5h.onrender.com/save-device", {
 
 method:"POST",
@@ -2875,7 +2878,7 @@ deviceType: /Mobi|Android/i.test(navigator.userAgent)
 });
 
 const data = await response.json();
-
+console.log(data);
 if(data.success){
 
 document.body.innerHTML = \`
