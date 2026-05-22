@@ -2883,7 +2883,7 @@ if(data.success){
 
 if(data.multiAccount){
 
-document.body.innerHTML = `
+document.body.innerHTML = "
 <div class="box">
 
 <div class="success">⚠️</div>
@@ -2896,13 +2896,13 @@ but referral rewards are disabled.
 </p>
 
 </div>
-`;
+";
 
 return;
 
 }
 
-document.body.innerHTML = `
+document.body.innerHTML = "
 <div class="box">
 
 <div class="success">✅</div>
@@ -2912,7 +2912,7 @@ document.body.innerHTML = `
 <p>You can now return to Telegram bot.</p>
 
 </div>
-`;
+";
 
 }else{
 
