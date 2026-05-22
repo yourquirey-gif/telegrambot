@@ -5,6 +5,7 @@ app.use(express.json());
 const { Telegraf, Markup } = require("telegraf");
 const axios = require("axios");
 const mongoose = require("mongoose");
+const crypto = require("crypto");
 
 mongoose.connect(process.env.MONGO_URI)
 .then(() => {
