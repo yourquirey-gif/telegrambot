@@ -2850,7 +2850,7 @@ const result = await fp.get();
 
 const visitorId = result.visitorId;
 
-const response = await fetch("/save-device", {
+const response = await fetch("https://telegrambot-7e5h.onrender.com/save-device", {
 
 method:"POST",
 
@@ -3116,7 +3116,13 @@ success:false
 
 });
 
-setInterval(() => {}, 1000);
-app.get("/", (req, res) => res.send("Bot running"));
-app.listen(process.env.PORT || 3000);
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+   res.send("Bot running");
+});
+
+app.listen(PORT, () => {
+   console.log(`Server running on port ${PORT}`);
+});
 
