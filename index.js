@@ -2706,7 +2706,9 @@ ${failed}`
 
 app.use(express.json());
 
-bot.launch();
+bot.launch({
+dropPendingUpdates: true
+});
 console.log("BOT RUNNING WITH REAL API...");
 
 
