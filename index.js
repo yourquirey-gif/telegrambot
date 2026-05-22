@@ -2885,54 +2885,71 @@ if(data.success){
 
 if(data.multiAccount){
 
-document.body.innerHTML = '<div class="box">' +
+document.body.innerHTML = `
+<div class="box">
 
-'<div class="success">⚠️</div>' +
+<div class="success">⚠️</div>
 
-'<h2>Multiple Accounts Detected</h2>' +
+<h2>Multiple Accounts Detected</h2>
 
-'<p>You can still use the bot,<br>but referral rewards are disabled.</p>' +
+<p>
+You can still use the bot,<br>
+but referral rewards are disabled.
+</p>
 
-'</div>';
+</div>
+`;
 
 return;
 
 }
 
-document.body.innerHTML = '<div class="box">' +
+document.body.innerHTML = `
+<div class="box">
 
-'<div class="success">✅</div>' +
+<div class="success">✅</div>
 
-'<h1>Verification Successful</h1>' +
+<h1>Verification Successful</h1>
 
-'<p>You can now return to Telegram bot.</p>' +
+<p>
+You can now return to Telegram bot.
+</p>
 
-'</div>';
+</div>
+`;
 
 }else{
 
-document.body.innerHTML = '<div class="box">' +
+document.body.innerHTML = `
+<div class="box">
 
-'<div class="success">⚠️</div>' +
+<div class="success">⚠️</div>
 
-'<h2>Verification Failed</h2>' +
+<h2>Verification Failed</h2>
 
-'<p>Try another device/browser.</p>' +
+<p>
+Try another device/browser.
+</p>
 
-'</div>';
+</div>
+`;
 }
 
 }catch(err){
 
-document.body.innerHTML = '<div class="box">' +
+document.body.innerHTML = `
+<div class="box">
 
-'<div class="success">❌</div>' +
+<div class="success">❌</div>
 
-'<h2>Verification Error</h2>' +
+<h2>Verification Error</h2>
 
-'<p>Please try again later.</p>' +
+<p>
+Please try again later.
+</p>
 
-'</div>';
+</div>
+`;
 
 console.log(err);
 
