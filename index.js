@@ -2916,7 +2916,7 @@ document.body.innerHTML = "
 
 }else{
 
-document.body.innerHTML = `
+document.body.innerHTML = "
 <div class="box">
 
 <div class="success">⚠️</div>
@@ -2926,7 +2926,7 @@ document.body.innerHTML = `
 <p>Try another device/browser.</p>
 
 </div>
-`;
+";
 
 }
 
