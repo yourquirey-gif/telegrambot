@@ -2932,7 +2932,7 @@ document.body.innerHTML = "
 
 }catch(err){
 
-document.body.innerHTML = `
+document.body.innerHTML = "
 
 <div class="box">
 
@@ -2944,7 +2944,7 @@ document.body.innerHTML = `
 
 </div>
 
-`;
+";
 
 console.log(err);
 
