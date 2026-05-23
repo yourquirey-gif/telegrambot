@@ -2079,6 +2079,13 @@ Markup.button.callback(
 
 [
 Markup.button.callback(
+"👥 Users List",
+"admin_users"
+)
+],
+
+[
+Markup.button.callback(
 "💎 Add Credit",
 "admin_addcredit"
 ),
@@ -2214,6 +2221,63 @@ Markup.button.callback(
 
 
 // ================= ADMIN BUTTON ACTIONS =================
+
+bot.action("admin_users", async(ctx)=>{
+
+if(!(await isAdmin(ctx.from.id)))
+return;
+
+const users =
+await User.find();
+
+if(users.length === 0){
+
+return ctx.reply(
+"❌ No users found"
+);
+
+}
+
+let text =
+`👥 USER LIST\n\n`;
+
+for(const u of users){
+
+text +=
+`👤 ${u.username || "NoName"}
+
+🆔 ${u.userId}
+
+💎 Credits: ${u.credits}
+
+📦 OTP: ${u.totalOtp || 0}
+
+✅ Verified:
+${u.verified ? "Yes" : "No"}
+
+━━━━━━━━━━━━━━
+`;
+
+}
+
+if(text.length > 4000){
+
+const chunks =
+text.match(/[\s\S]{1,4000}/g);
+
+for(const chunk of chunks){
+
+await ctx.reply(chunk);
+
+}
+
+}else{
+
+ctx.reply(text);
+
+}
+
+});
 
 bot.action("admin_addcountry", async(ctx)=>{
 
