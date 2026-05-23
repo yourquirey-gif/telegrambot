@@ -705,7 +705,7 @@ Markup.inlineKeyboard(buttons)
 
 // ================= SELECT COUNTRY =================
 
-bot.action(/buy_srv_(.+)_(\d+)?/, async (ctx) => {
+bot.action(/buy_srv_([^_]+)_(\d+)/, async (ctx) => {
 
 const service =
 String(ctx.match[1]).toLowerCase();
@@ -948,7 +948,8 @@ Markup.inlineKeyboard(buttons)
 });
 
 // ================= BUY NUMBER (DYNAMIC FOR ALL COUNTRIES - FIXED) =================
-bot.action(/select_country_(.+)_(.+)_(.+)_(.+)/, async (ctx) => {
+
+   bot.action(/select_country_([^_]+)_([^_]+)_([^_]+)_([^_]+)/, async (ctx) => {
    const userId = String(ctx.from.id);
 
 const now = Date.now();
