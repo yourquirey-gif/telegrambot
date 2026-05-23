@@ -2288,6 +2288,12 @@ Markup.button.callback(
 )
 ],
 
+Markup.button.callback(
+"➕ Add All",
+"admin_addall"
+)
+],   
+   
 [
 Markup.button.callback(
 "💎 Set Price for service which country",
@@ -2303,6 +2309,70 @@ Markup.button.callback(
 
 
 // ================= ADMIN BUTTON ACTIONS =================
+
+bot.command("addall", async(ctx)=>{
+
+    if(ctx.from.id !== OWNER_ID)
+    return;
+
+    const amount =
+    Number(
+        ctx.message.text.split(" ")[1]
+    );
+
+    if(!amount){
+
+        return ctx.reply(
+            "❌ Example:\n/addall 2"
+        );
+
+    }
+
+    const users =
+    await User.find();
+
+    let total = 0;
+
+    for(const user of users){
+
+        user.credits += amount;
+
+        await user.save();
+
+        total++;
+
+        try{
+
+            await bot.telegram.sendMessage(
+
+                user.userId,
+
+`🎉 Admin added credits
+
+💎 +${amount} credits
+
+💰 New Balance:
+${user.credits}`
+
+            );
+
+        }catch{}
+
+    }
+
+    ctx.reply(
+
+`✅ Credits Added To All Users
+
+👥 Users:
+${total}
+
+💎 Added:
+${amount}`
+
+    );
+
+});
 
 bot.action("admin_deductcredit", async(ctx)=>{
 
@@ -2465,6 +2535,18 @@ ctx.reply(
 
 });
 
+bot.action("admin_addall", async(ctx)=>{
+
+if(ctx.from.id !== OWNER_ID)
+return;
+
+ctx.reply(
+`➕ Use Command:
+
+/addall 5`
+);
+
+});
 bot.action("admin_setprice2", async(ctx)=>{
 
 if(!(await isAdmin(ctx.from.id)))
