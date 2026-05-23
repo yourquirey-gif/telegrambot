@@ -2285,14 +2285,13 @@ Markup.button.callback(
 Markup.button.callback(
 "💸 Deduct All",
 "admin_deductall"
-)
-],
+),
 
 Markup.button.callback(
 "➕ Add All",
 "admin_addall"
 )
-],   
+],
    
 [
 Markup.button.callback(
