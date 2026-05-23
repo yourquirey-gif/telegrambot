@@ -1813,8 +1813,12 @@ return ctx.reply(
 
 }
 
-country.servicePrices[service] =
-price;
+country.servicePrices = {
+   ...country.servicePrices,
+   [service]: price
+};
+
+await country.markModified("servicePrices");
 
 await country.save();
 
