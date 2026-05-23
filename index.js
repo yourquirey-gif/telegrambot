@@ -1433,6 +1433,83 @@ await user.save();
     try { await bot.telegram.sendMessage(userId, `🎉 ${amount} credits added! Balance: ${user.credits}`); } catch(e){}
 });
 
+bot.command("deductcredit", async (ctx) => {
+
+if(!(await isAdmin(ctx.from.id)))
+return ctx.reply("❌ Admin only");
+
+const args =
+ctx.message.text.split(" ");
+
+const userId =
+String(args[1]);
+
+const amount =
+Number(args[2]);
+
+if(!userId || !amount){
+
+return ctx.reply(
+
+"❌ Example:\n/deductcredit userid 5"
+
+);
+
+}
+
+const user =
+await User.findOne({
+userId
+});
+
+if(!user){
+
+return ctx.reply(
+"❌ User not found"
+);
+
+}
+
+user.credits =
+Math.max(
+0,
+user.credits - amount
+);
+
+await user.save();
+
+ctx.reply(
+
+`✅ Credits Deducted
+
+👤 User:
+${userId}
+
+💎 Deducted:
+${amount}
+
+💰 Remaining:
+${user.credits}`
+
+);
+
+try{
+
+await bot.telegram.sendMessage(
+
+userId,
+
+`⚠️ ${amount} credits deducted
+
+💰 Remaining balance:
+${user.credits}`
+
+);
+
+}catch{}
+
+});
+
 bot.command("addforce", async(ctx)=>{
 
     if(!(await isAdmin(ctx.from.id)))
@@ -2091,6 +2168,11 @@ Markup.button.callback(
 ),
 
 Markup.button.callback(
+"➖ Deduct Credit",
+"admin_deductcredit"
+)   
+
+Markup.button.callback(
 "📢 Broadcast",
 "admin_broadcast"
 )
@@ -2221,6 +2303,19 @@ Markup.button.callback(
 
 
 // ================= ADMIN BUTTON ACTIONS =================
+
+bot.action("admin_deductcredit", async(ctx)=>{
+
+if(!(await isAdmin(ctx.from.id)))
+return;
+
+ctx.reply(
+`➖ Use Command:
+
+/deductcredit userid amount`
+);
+
+});
 
 bot.action("admin_users", async(ctx)=>{
 
