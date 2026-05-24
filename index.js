@@ -388,8 +388,10 @@ if(!user){
 💎 BALANCE : ${credits} credits
 [${bar}]
 
-⚡ COST / OTP : 1 credit
+⚡ COST / OTP : Depends on service
 ✅ Charged only if NEW OTP arrives
+
+🏆 #Top Whole TG We Provide Cheap Numbers For Any Services
 
 ━━━━━━━━━━━━━━━━━━`,
 {
