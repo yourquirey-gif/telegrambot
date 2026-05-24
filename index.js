@@ -744,60 +744,56 @@ Math.ceil(total / limit);
 
 let buttons = [];
    
-for(let i = 0; i < countries.length; i += 2){
+for(const c of countries){
 
-let row = [];
+let stock = "0";
 
-const c1 = countries[i];
+const cacheKey =
+`${service}_${c.countryId}`;
 
-let stock1 = "0";
-
-const cacheKey1 =
-`${service}_${c1.countryId}`;
-
-if(stockCache.has(cacheKey1)){
+if(stockCache.has(cacheKey)){
 
 const cached =
-stockCache.get(cacheKey1);
+stockCache.get(cacheKey);
 
 if(Date.now() < cached.expire){
 
-stock1 = cached.stock;
+stock = cached.stock;
 
 }else{
 
-stockCache.delete(cacheKey1);
+stockCache.delete(cacheKey);
 
 }
 
 }
 
-if(stock1 === "0"){
+if(stock === "0"){
 
 try{
 
-const stockData1 =
+const stockData =
 await callVakApi(
 'getNumbersStatus',
 {
-country: c1.countryId
+country: c.countryId
 }
 );
 
 if(
-stockData1 &&
-typeof stockData1 === "object"
+stockData &&
+typeof stockData === "object"
 ){
 
-stock1 =
-stockData1[
+stock =
+stockData[
 `${service}_0`
 ] || "0";
 
 stockCache.set(
-cacheKey1,
+cacheKey,
 {
-stock: stock1,
+stock,
 expire:
 Date.now() + 30000
 }
@@ -809,90 +805,14 @@ Date.now() + 30000
 
 }
 
-row.push(
+buttons.push([
 
 Markup.button.callback(
-`${c1.name} • 💎 ${c1.servicePrices[service] || 1} • 📦 ${stock1}`,
-`select_country_${service}_${c1.countryId}_${c1.countryCode}_${c1.servicePrices[service] || 1}`
+`${c.name} • 💎 ${c.servicePrices[service] || 1} • 📦 ${stock}`,
+`select_country_${service}_${c.countryId}_${c.countryCode}_${c.servicePrices[service] || 1}`
 )
 
-);
-
-if(countries[i + 1]){
-
-const c2 = countries[i + 1];
-
-let stock2 = "0";
-
-const cacheKey2 =
-`${service}_${c2.countryId}`;
-
-if(stockCache.has(cacheKey2)){
-
-const cached =
-stockCache.get(cacheKey2);
-
-if(Date.now() < cached.expire){
-
-stock2 = cached.stock;
-
-}else{
-
-stockCache.delete(cacheKey2);
-
-}
-
-}
-
-if(stock2 === "0"){
-
-try{
-
-const stockData2 =
-await callVakApi(
-'getNumbersStatus',
-{
-country: c2.countryId
-}
-);
-
-if(
-stockData2 &&
-typeof stockData2 === "object"
-){
-
-stock2 =
-stockData2[
-`${service}_0`
-] || "0";
-
-stockCache.set(
-cacheKey2,
-{
-stock: stock2,
-expire:
-Date.now() + 30000
-}
-);
-
-}
-
-}catch{}
-
-}
-
-row.push(
-
-Markup.button.callback(
-`${c2.name} • 💎 ${c2.servicePrices[service] || 1} • 📦 ${stock2}`,
-`select_country_${service}_${c2.countryId}_${c2.countryCode}_${c2.servicePrices[service] || 1}`
-)
-
-);
-
-}
-
-buttons.push(row);
+]);
 
 }
 
@@ -920,16 +840,38 @@ Markup.button.callback(
 
 }
 
-if(nav.length > 0){
-buttons.push(nav);
+let bottomRow = [];
+
+if(page > 1){
+
+bottomRow.push(
+Markup.button.callback(
+"⬅ Previous",
+`buy_srv_${service}_${page - 1}`
+)
+);
+
 }
 
-buttons.push([
+bottomRow.push(
 Markup.button.callback(
 "🏠 Home",
 "home"
 )
-]);
+);
+
+if(page < totalPages){
+
+bottomRow.push(
+Markup.button.callback(
+"Next ➡",
+`buy_srv_${service}_${page + 1}`
+)
+);
+
+}
+
+buttons.push(bottomRow);
 
 ctx.reply(
 
