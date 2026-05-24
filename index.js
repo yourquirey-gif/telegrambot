@@ -1463,9 +1463,19 @@ bot.command("addforce", async(ctx)=>{
     ctx.message.text.split(" ")[1];
 
     if(!channel){
-        return ctx.reply(
-            "❌ Example: /addforce @channel"
-        );
+
+return ctx.reply(
+
+`❌ Example:
+
+/addforce @channel
+
+OR
+
+/addforce -100xxxxxxxxxx`
+
+);
+
     }
 
     const already =
