@@ -713,7 +713,7 @@ String(ctx.match[1]).toLowerCase();
 const page =
 Number(ctx.match[2]) || 1;
 
-const limit = 10;
+const limit = 5;
 
 const skip =
 (page - 1) * limit;
