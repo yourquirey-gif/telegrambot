@@ -486,12 +486,27 @@ await user.save();
     if(notJoined.length > 0){
 
         let buttons =
-        notJoined.map(c => [
-            Markup.button.url(
-    `📢 Join ${c}`,
-                `https://t.me/${c.replace("@","")}`
-            )
-        ]);
+notJoined.map(c => {
+
+if(String(c).startsWith("-100")){
+
+return [
+Markup.button.url(
+"📢 Join Channel",
+"https://t.me"
+)
+];
+
+}
+
+return [
+Markup.button.url(
+`📢 Join ${c}`,
+`https://t.me/${c.replace("@","")}`
+)
+];
+
+});
 
         buttons.push([
             Markup.button.callback(
