@@ -810,7 +810,7 @@ Date.now() + 30000
 buttons.push([
 
 Markup.button.callback(
-`${c.name} • 💎 ${c.servicePrices[service] || 1} • 📦 ${stock}`,
+`${c.name}  💎${c.servicePrices[service] || 1}  📦${stock}`,
 `select_country_${service}_${c.countryId}_${c.countryCode}_${c.servicePrices[service] || 1}`
 )
 
