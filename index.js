@@ -495,31 +495,24 @@ await user.save();
 
     if(notJoined.length > 0){
 
-let buttons =
-notJoined.map(c => {
+let buttons = notJoined.map(c => {
 
-if(
-String(c.channel).startsWith("-100")
-){
+if(String(c).startsWith("-100")){
 
 return [
-
 Markup.button.url(
-`📢 ${c.title}`,
-c.joinLink || "https://t.me"
+"📢 Join Channel",
+"https://t.me"
 )
-
 ];
 
 }
 
 return [
-
 Markup.button.url(
-`📢 ${c.title}`,
-`https://t.me/${c.channel.replace("@","")}`
+`📢 Join ${c}`,
+`https://t.me/${c.replace("@","")}`
 )
-
 ];
 
 });
@@ -1286,6 +1279,7 @@ ${BONUS_SETTINGS.referralBonus} credits
 💎 Invite friends and earn unlimited credits.`
 
 );
+   });
 
 bot.action("tasks", async(ctx)=>{
     if(tasks.length === 0) return ctx.reply("❌ No tasks available");
