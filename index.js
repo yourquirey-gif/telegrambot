@@ -111,6 +111,11 @@ const forceSchema = new mongoose.Schema({
    joinLink: {
       type: String,
       default: null
+   },
+
+   title: {
+      type: String,
+      default: "Join Channel"
    }
 
 });
@@ -500,7 +505,7 @@ String(c.channel).startsWith("-100")
 return [
 
 Markup.button.url(
-"📢 Join Channel",
+`📢 ${c.title}`,
 c.joinLink || "https://t.me"
 )
 
@@ -511,7 +516,7 @@ c.joinLink || "https://t.me"
 return [
 
 Markup.button.url(
-`📢 Join ${c.channel}`,
+`📢 ${c.title}`,
 `https://t.me/${c.channel.replace("@","")}`
 )
 
@@ -1112,6 +1117,52 @@ bot.action(/api_otp_(.+)_(.+)_(.+)/, async (ctx) => {
     if (responseData && typeof responseData === 'string' && responseData.includes('STATUS_OK')) {
         const smsCode = responseData.split(':')[1]; 
 user.totalOtp += 1;
+
+       // ================= REFERRAL REWARD AFTER 2 OTP =================
+
+if(
+user.pendingReferral &&
+!user.rewardGiven &&
+user.totalOtp >= 2
+){
+
+const refUser =
+await User.findOne({
+userId: user.pendingReferral
+});
+
+if(refUser){
+
+refUser.credits +=
+BONUS_SETTINGS.referralBonus;
+
+refUser.referrals += 1;
+
+await refUser.save();
+
+user.rewardGiven = true;
+
+await user.save();
+
+try{
+
+await bot.telegram.sendMessage(
+
+refUser.userId,
+
+`🎉 Referral Completed Successfully
+
+👤 Your referred user completed 2 OTPs
+
+💎 +${BONUS_SETTINGS.referralBonus} credits added to your wallet.`
+
+);
+
+}catch{}
+
+}
+
+}
         user.credits = Math.max(0, user.credits - price);
        user.activeOrder = false;
         await user.save();
@@ -1206,7 +1257,7 @@ bot.action("referral", async(ctx)=>{
         userId: String(ctx.from.id)
     });
 
-    ctx.reply(
+   ctx.reply(
 
 `👥 REFERRAL SYSTEM
 
@@ -1219,16 +1270,22 @@ https://t.me/tgfreeotpbot?start=${ctx.from.id}
 👥 Total Referrals:
 ${user.referrals}
 
-🎁 Per Referral:
+🎁 Reward:
 ${BONUS_SETTINGS.referralBonus} credits
 
 ━━━━━━━━━━━━━━━━━━
 
-💎 Earn unlimited credits by inviting friends.`
+⚠️ Referral Conditions:
 
-    );
+✅ User must verify device
+✅ User must complete 2 OTPs
+✅ Fake/VPN/Multi accounts are rejected
 
-});
+━━━━━━━━━━━━━━━━━━
+
+💎 Invite friends and earn unlimited credits.`
+
+);
 
 bot.action("tasks", async(ctx)=>{
     if(tasks.length === 0) return ctx.reply("❌ No tasks available");
@@ -1488,27 +1545,33 @@ return;
 const args =
 ctx.message.text.split(" ");
 
-const channel =
-args[1];
-
-const joinLink =
-args[2] || null;
-
-if(!channel){
+if(args.length < 2){
 
 return ctx.reply(
 
-`❌ Example:
+`❌ Examples:
 
-Public:
-/addforce @channel
+🌍 Public Channel:
 
-Private:
-/addforce -100xxxxxxxxxx https://t.me/+xxxx`
+/addforce @mychannel none Anime Updates
+
+🔒 Private Channel:
+
+/addforce -1001234567890 https://t.me/+abcd Premium Updates`
 
 );
 
 }
+
+const channel = args[1];
+
+const joinLink =
+args[2] && args[2] !== "none"
+? args[2]
+: null;
+
+const title =
+args.slice(3).join(" ") || "Join Channel";
 
 const already =
 await ForceChannel.findOne({
@@ -1526,22 +1589,26 @@ return ctx.reply(
 await ForceChannel.create({
 
 channel,
-joinLink
+joinLink,
+title
 
 });
 
 ctx.reply(
 
-`✅ Force channel added
+`✅ Force Channel Added
 
-📢 ${channel}
+📢 Title:
+${title}
 
-${joinLink ? `🔗 ${joinLink}` : ""}`
+🆔 Channel:
+${channel}
+
+${joinLink ? `🔗 Link:\n${joinLink}` : "🌍 Public Channel"}`
 
 );
 
 });
-
 bot.command("addtask", async(ctx)=>{
     if(!(await isAdmin(ctx.from.id))) return;
     const args = ctx.message.text.split(" ");
@@ -2658,11 +2725,17 @@ bot.action("admin_addforce", async(ctx)=>{
     if(!(await isAdmin(ctx.from.id)))
     return;
 
-    ctx.reply(
-`📢 Use Command:
+   ctx.reply(
+`📢 Examples:
 
-/addforce @channel`
-    );
+🌍 Public Channel:
+
+/addforce @mychannel none Anime Updates
+
+🔒 Private Channel:
+
+/addforce -1001234567890 https://t.me/+abcd Premium Updates`
+);
 
 });
 
@@ -3294,47 +3367,6 @@ await user.save();
 
 // ================= REFERRAL REWARD =================
 
-if(
-user.pendingReferral &&
-!user.rewardGiven &&
-!multiAccount
-){
-
-const refUser =
-await User.findOne({
-userId:user.pendingReferral
-});
-
-if(refUser){
-
-refUser.credits +=
-BONUS_SETTINGS.referralBonus;
-
-refUser.referrals += 1;
-
-await refUser.save();
-
-user.rewardGiven = true;
-
-await user.save();
-
-try{
-
-await bot.telegram.sendMessage(
-
-refUser.userId,
-
-`🎉 Referral verified successfully
-
-💎 +${BONUS_SETTINGS.referralBonus} credits added`
-
-);
-
-}catch{}
-
-}
-
-}
 
 return res.json({
 
