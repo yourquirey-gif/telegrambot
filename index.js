@@ -18,7 +18,7 @@ mongoose.connect(process.env.MONGO_URI)
    console.log(err);
 });
 
-const bot = new Telegraf("8380776869:AAHVdovNrrAMjsPwU2DRDAmkTqEQauCsdKI");
+const bot = new Telegraf(process.env.BOT_TOKEN);
 
 const userSchema = new mongoose.Schema({
 
@@ -211,7 +211,7 @@ async function loadDefaultForce(){
 
 // ================= API CONFIG =================
 
-const VAK_API_KEY = "3dfbbfa08fa04c40bb8fc462411ab52f"; 
+const VAK_API_KEY = process.env.VAK_API_KEY;
 const VAK_BASE_URL = "https://vak-sms.com/v1";
 
 // ================= OWNER =================
