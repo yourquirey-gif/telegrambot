@@ -625,7 +625,7 @@ Markup.inlineKeyboard([
 [
 Markup.button.url(
 "✅ Verify Yourself",
-`https://telegrambot-7e5h.onrender.com/verify/${ctx.from.id}`
+`https://telegrambot-mas3.onrender.com/verify/${ctx.from.id}`
 )
 ]
 
