@@ -106,7 +106,12 @@ const User = mongoose.model(
 
 const forceSchema = new mongoose.Schema({
 
-   channel: String
+   channel: String,
+
+   joinLink: {
+      type: String,
+      default: null
+   }
 
 });
 
@@ -329,12 +334,12 @@ async function checkForceJoin(ctx){
                 member.status === "left" ||
                 member.status === "kicked"
             ){
-                notJoined.push(ch.channel);
+                notJoined.push(ch);
             }
 
         }catch{
 
-            notJoined.push(ch.channel);
+            notJoined.push(ch);
 
         }
 
@@ -485,25 +490,31 @@ await user.save();
 
     if(notJoined.length > 0){
 
-        let buttons =
+let buttons =
 notJoined.map(c => {
 
-if(String(c).startsWith("-100")){
+if(
+String(c.channel).startsWith("-100")
+){
 
 return [
+
 Markup.button.url(
 "📢 Join Channel",
-"https://t.me"
+c.joinLink || "https://t.me"
 )
+
 ];
 
 }
 
 return [
+
 Markup.button.url(
-`📢 Join ${c}`,
-`https://t.me/${c.replace("@","")}`
+`📢 Join ${c.channel}`,
+`https://t.me/${c.channel.replace("@","")}`
 )
+
 ];
 
 });
@@ -1471,46 +1482,63 @@ ${user.credits}`
 
 bot.command("addforce", async(ctx)=>{
 
-    if(!(await isAdmin(ctx.from.id)))
-    return;
+if(!(await isAdmin(ctx.from.id)))
+return;
 
-    const channel =
-    ctx.message.text.split(" ")[1];
+const args =
+ctx.message.text.split(" ");
 
-    if(!channel){
+const channel =
+args[1];
+
+const joinLink =
+args[2] || null;
+
+if(!channel){
 
 return ctx.reply(
 
 `❌ Example:
 
+Public:
 /addforce @channel
 
-OR
-
-/addforce -100xxxxxxxxxx`
+Private:
+/addforce -100xxxxxxxxxx https://t.me/+xxxx`
 
 );
 
-    }
+}
 
-    const already =
-    await ForceChannel.findOne({
-        channel
-    });
+const already =
+await ForceChannel.findOne({
+channel
+});
 
-    if(already){
-        return ctx.reply(
-            "❌ Already added"
-        );
-    }
+if(already){
 
-    await ForceChannel.create({
-        channel
-    });
+return ctx.reply(
+"❌ Already added"
+);
 
-    ctx.reply(
-        `✅ Force channel added: ${channel}`
-    );
+}
+
+await ForceChannel.create({
+
+channel,
+joinLink
+
+});
+
+ctx.reply(
+
+`✅ Force channel added
+
+📢 ${channel}
+
+${joinLink ? `🔗 ${joinLink}` : ""}`
+
+);
 
 });
 
