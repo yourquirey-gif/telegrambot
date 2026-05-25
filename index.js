@@ -572,7 +572,7 @@ Markup.inlineKeyboard([
 [
 Markup.button.url(
 "✅ Verify Yourself",
-`https://telegrambot-7e5h.onrender.com/verify/${ctx.from.id}`
+`https://telegrambot-mas3.onrender.com/verify/${ctx.from.id}`
 )
 ]
 
@@ -3170,7 +3170,7 @@ const result = await fp.get();
 
 const visitorId = result.visitorId;
 console.log("Sending verification request...");
-const response = await fetch("https://telegrambot-7e5h.onrender.com/save-device", {
+const response = await fetch("https://telegrambot-mas3.onrender.com/save-device", {
 
 method:"POST",
 
