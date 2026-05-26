@@ -454,6 +454,8 @@ if(!user){
 
 bot.start(async(ctx)=>{
 
+   if(await checkMaintenance(ctx)) return;
+
     const userId = String(ctx.from.id);
 
     const username =
@@ -623,6 +625,8 @@ return sendHome(ctx);
 
 bot.action("check_join", async(ctx)=>{
 
+   if(await checkMaintenance(ctx)) return;
+
 const notJoined =
 await checkForceJoin(ctx);
 
@@ -679,6 +683,8 @@ return sendHome(ctx);
 // ================= DEVICES (Category Fetch) =================
 
 bot.action(/devices_(\d+)?/, async(ctx)=>{
+
+   if(await checkMaintenance(ctx)) return;
 
    const user =
 await User.findOne({
@@ -773,6 +779,8 @@ Markup.inlineKeyboard(buttons)
 // ================= SELECT COUNTRY =================
 
 bot.action(/buy_srv_([^_]+)_(\d+)/, async (ctx) => {
+
+   if(await checkMaintenance(ctx)) return;
 
 const service =
 String(ctx.match[1]).toLowerCase();
@@ -959,6 +967,9 @@ Markup.inlineKeyboard(buttons)
 // ================= BUY NUMBER (DYNAMIC FOR ALL COUNTRIES - FIXED) =================
 
    bot.action(/select_country_([^_]+)_([^_]+)_([^_]+)_([^_]+)/, async (ctx) => {
+
+      if(await checkMaintenance(ctx)) return;
+      
    const userId = String(ctx.from.id);
 
 const now = Date.now();
@@ -1158,6 +1169,8 @@ Then tap refresh to get OTP.`,
 // ================= OTP FETCH SYSTEM (FIXED ACTION) =================
 
 bot.action(/api_otp_(.+)_(.+)_(.+)/, async (ctx) => {
+   if(await checkMaintenance(ctx)) return;
+   
     const orderId = ctx.match[1];
     const service = ctx.match[2];
    const price = Number(ctx.match[3]);
@@ -1253,6 +1266,8 @@ refUser.userId,
 // ================= CANCEL ORDER (FIXED ACTION) =================
 
 bot.action(/cancel_(.+)/, async (ctx) => {
+   if(await checkMaintenance(ctx)) return;
+   
     const orderId = ctx.match[1];
     
     // Fixed capitalization: setStatus
@@ -1303,6 +1318,7 @@ ctx.reply(
 // ================= CREDITS, REFERRAL, TASKS (Rest of your code) =================
 
 bot.action("credits", async(ctx)=>{
+   if(await checkMaintenance(ctx)) return;
     const userId = ctx.from.id;
     const user = await User.findOne({
    userId: String(userId)
@@ -1321,10 +1337,12 @@ Markup.button.callback("🏠 Home", "home")
 });
 
 bot.action("buy",(ctx)=>{
+   if(await checkMaintenance(ctx)) return;
     ctx.reply(`💎 Buy Credits\n\n👤 Contact : ${creditSettings.contact}\n⚡ Price : ₹${creditSettings.pricePerCredit}/credit`, Markup.inlineKeyboard([[Markup.button.url("👤 Contact Admin", `https://t.me/${creditSettings.contact.replace("@","")}`)]]));
 });
 
 bot.action("referral", async(ctx)=>{
+   if(await checkMaintenance(ctx)) return;
 
     const user =
     await User.findOne({
@@ -1363,12 +1381,14 @@ ${BONUS_SETTINGS.referralBonus} credits
    });
 
 bot.action("tasks", async(ctx)=>{
+   if(await checkMaintenance(ctx)) return;
     if(tasks.length === 0) return ctx.reply("❌ No tasks available");
     let buttons = tasks.map(t => [Markup.button.url(`🎁 Earn ${t.credits}💎`, t.channel), Markup.button.callback("✅ Claim", `claim_${t.id}`)]);
     ctx.reply(`🎁 TASKS\n\nComplete tasks and earn credits`, Markup.inlineKeyboard(buttons));
 });
 
 bot.action(/claim_(.+)/, async(ctx)=>{
+   if(await checkMaintenance(ctx)) return;
     const userId = ctx.from.id;
     const taskId = Number(ctx.match[1]);
     const task = tasks.find((t)=> t.id === taskId);
@@ -1387,6 +1407,7 @@ await user.save();
 });
 
 bot.action("profile", async(ctx)=>{
+   if(await checkMaintenance(ctx)) return;
 
 const user =
 await User.findOne({
@@ -1440,6 +1461,7 @@ Markup.button.callback(
 });
 
 bot.action("home", async(ctx)=>{
+   if(await checkMaintenance(ctx)) return;
    await sendHome(ctx);
 });
 
@@ -2485,6 +2507,17 @@ Markup.button.callback(
 "💎 Set Price for service which country",
 "admin_setprice2"
 )
+],
+[
+Markup.button.callback(
+"🛠 Maintenance ON",
+"admin_maintenance_on"
+),
+
+Markup.button.callback(
+"✅ Maintenance OFF",
+"admin_maintenance_off"
+)
 ]
 
 ])
@@ -2941,6 +2974,40 @@ bot.action("admin_removeadmin", async(ctx)=>{
 });
 
 // ================= ADD ADMIN =================
+
+bot.action("admin_maintenance_on", async(ctx)=>{
+
+if(!(await isAdmin(ctx.from.id)))
+return;
+
+ctx.reply(
+
+`🛠 Enable Maintenance Mode
+
+Use Command:
+
+/maintenance on`
+
+);
+
+});
+
+bot.action("admin_maintenance_off", async(ctx)=>{
+
+if(!(await isAdmin(ctx.from.id)))
+return;
+
+ctx.reply(
+
+`✅ Disable Maintenance Mode
+
+Use Command:
+
+/maintenance off`
+
+);
+
+});
 
 bot.command("addadmin", async(ctx)=>{
 
