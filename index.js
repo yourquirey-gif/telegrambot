@@ -1050,11 +1050,15 @@ Please complete or cancel it first.`
         // ================= SUCCESS RESPONSE =================
         if (responseData && typeof responseData === "string" && responseData.includes("ACCESS_NUMBER")) {
             const parts = responseData.split(":");
-            const orderId = parts[1];
-           user.activeOrder = true;
+
+const orderId = parts[1];
+
+user.activeOrder = true;
+user.activeOrderId = orderId;
 
 await user.save();
-            const phoneNumber = parts[2];
+
+const phoneNumber = parts[2];
 
             return ctx.reply(
 `╔══════════════════════╗
