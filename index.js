@@ -1445,6 +1445,54 @@ bot.action("home", async(ctx)=>{
 
 // ================= ADMIN COMMANDS =================
 
+bot.command("maintenance", async(ctx)=>{
+
+if(!(await isAdmin(ctx.from.id))){
+return;
+}
+
+const status =
+ctx.message.text.split(" ")[1];
+
+if(!status){
+
+return ctx.reply(
+
+`❌ Example:
+
+/maintenance on
+/maintenance off`
+
+);
+
+}
+
+if(status.toLowerCase() === "on"){
+
+maintenanceMode = true;
+
+return ctx.reply(
+"✅ Maintenance mode enabled"
+);
+
+}
+
+if(status.toLowerCase() === "off"){
+
+maintenanceMode = false;
+
+return ctx.reply(
+"✅ Maintenance mode disabled"
+);
+
+}
+
+ctx.reply(
+"❌ Use only on/off"
+);
+
+});
+
 bot.command("setprice", async(ctx)=>{
     if(!(await isAdmin(ctx.from.id))) return ctx.reply("❌ Admin only");
     const amount = Number(ctx.message.text.split(" ")[1]);
