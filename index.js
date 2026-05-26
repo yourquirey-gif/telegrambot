@@ -1318,22 +1318,63 @@ ctx.reply(
 // ================= CREDITS, REFERRAL, TASKS (Rest of your code) =================
 
 bot.action("credits", async(ctx)=>{
-   if(await checkMaintenance(ctx)) return;
-    const userId = ctx.from.id;
-    const user = await User.findOne({
-   userId: String(userId)
+
+if(await checkMaintenance(ctx)) return;
+
+const userId = ctx.from.id;
+
+const user = await User.findOne({
+userId: String(userId)
 });
 
 const credits = user.credits;
-    const totalPrice = creditSettings.minimumCredits * creditSettings.pricePerCredit;
-    ctx.reply(`╔══════════════════════╗\n 💎 MY CREDIT WALLET\n╚══════════════════════╝\n\n💰 Balance : ${credits} credits\n━━━━━━━━━━━━━━━━━━\n₹${creditSettings.pricePerCredit}/credit\nMinimum : ${creditSettings.minimumCredits}\n━━━━━━━━━━━━━━━━━━\nAmount : ₹${totalPrice}\n━━━━━━━━━━━━━━━━━━\n👤 Contact : ${creditSettings.contact}`, Markup.inlineKeyboard([
 
-Markup.button.callback("🛒 Buy Credits", "buy")
-],
+const totalPrice =
+creditSettings.minimumCredits *
+creditSettings.pricePerCredit;
+
+ctx.reply(
+
+`╔══════════════════════╗
+ 💎 MY CREDIT WALLET
+╚══════════════════════╝
+
+💰 Balance : ${credits} credits
+
+━━━━━━━━━━━━━━━━━━
+
+₹${creditSettings.pricePerCredit}/credit
+
+Minimum : ${creditSettings.minimumCredits}
+
+━━━━━━━━━━━━━━━━━━
+
+Amount : ₹${totalPrice}
+
+━━━━━━━━━━━━━━━━━━
+
+👤 Contact : ${creditSettings.contact}`,
+
+Markup.inlineKeyboard([
+
 [
-Markup.button.callback("🏠 Home", "home")
+Markup.button.callback(
+"🛒 Buy Credits",
+"buy"
+)
+],
+
+[
+Markup.button.callback(
+"🏠 Home",
+"home"
+)
 ]
-]));
+
+])
+
+);
+
 });
 
 bot.action("buy", async(ctx)=>{
