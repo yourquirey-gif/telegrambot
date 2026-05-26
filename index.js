@@ -1192,6 +1192,8 @@ refUser.userId,
 }
         user.credits = Math.max(0, user.credits - price);
        user.activeOrder = false;
+       user.activeOrderId = null;
+       
         await user.save();
        
         ctx.reply(`╔══════════════════════╗\n 📩 NEW OTP RECEIVED\n╚══════════════════════╝\n\n🔐 OTP : <code>${smsCode}</code>\n\n💎 -${price} Credit Deducted\n💰 Remaining : ${user.credits} credits`, { parse_mode: "HTML" });
