@@ -1327,7 +1327,7 @@ bot.action("credits", async(ctx)=>{
 const credits = user.credits;
     const totalPrice = creditSettings.minimumCredits * creditSettings.pricePerCredit;
     ctx.reply(`╔══════════════════════╗\n 💎 MY CREDIT WALLET\n╚══════════════════════╝\n\n💰 Balance : ${credits} credits\n━━━━━━━━━━━━━━━━━━\n₹${creditSettings.pricePerCredit}/credit\nMinimum : ${creditSettings.minimumCredits}\n━━━━━━━━━━━━━━━━━━\nAmount : ₹${totalPrice}\n━━━━━━━━━━━━━━━━━━\n👤 Contact : ${creditSettings.contact}`, Markup.inlineKeyboard([
-[
+
 Markup.button.callback("🛒 Buy Credits", "buy")
 ],
 [
@@ -1336,7 +1336,7 @@ Markup.button.callback("🏠 Home", "home")
 ]));
 });
 
-bot.action("buy",(ctx)=>{
+bot.action("buy", async(ctx)=>{
    if(await checkMaintenance(ctx)) return;
     ctx.reply(`💎 Buy Credits\n\n👤 Contact : ${creditSettings.contact}\n⚡ Price : ₹${creditSettings.pricePerCredit}/credit`, Markup.inlineKeyboard([[Markup.button.url("👤 Contact Admin", `https://t.me/${creditSettings.contact.replace("@","")}`)]]));
 });
