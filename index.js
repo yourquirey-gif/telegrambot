@@ -1337,8 +1337,30 @@ Markup.button.callback("🏠 Home", "home")
 });
 
 bot.action("buy", async(ctx)=>{
+
    if(await checkMaintenance(ctx)) return;
-    ctx.reply(`💎 Buy Credits\n\n👤 Contact : ${creditSettings.contact}\n⚡ Price : ₹${creditSettings.pricePerCredit}/credit`, Markup.inlineKeyboard([[Markup.button.url("👤 Contact Admin", `https://t.me/${creditSettings.contact.replace("@","")}`)]]));
+
+   ctx.reply(
+
+`💎 Buy Credits
+
+👤 Contact : ${creditSettings.contact}
+
+⚡ Price : ₹${creditSettings.pricePerCredit}/credit`,
+
+Markup.inlineKeyboard([
+
+[
+Markup.button.url(
+"👤 Contact Admin",
+`https://t.me/${creditSettings.contact.replace("@","")}`
+)
+]
+
+])
+
+);
+
 });
 
 bot.action("referral", async(ctx)=>{
