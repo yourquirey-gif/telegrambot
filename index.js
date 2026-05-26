@@ -195,6 +195,36 @@ const Device = mongoose.model(
 const cooldowns = new Map();
 const stockCache = new Map();
 
+let maintenanceMode = false;
+
+async function checkMaintenance(ctx){
+
+if(await isAdmin(ctx.from.id)){
+return false;
+}
+
+if(maintenanceMode){
+
+await ctx.reply(
+
+`🛠 BOT UNDER MAINTENANCE
+
+We're currently upgrading and improving the bot to provide a better experience.
+
+⏳ Please wait for a while and try again later.
+
+🙏 Thank you for your patience.`
+
+);
+
+return true;
+
+}
+
+return false;
+
+}
+
 async function loadDefaultForce(){
 
    const exists =
