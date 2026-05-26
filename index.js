@@ -55,6 +55,11 @@ type: Boolean,
 default: false
 },
 
+activeOrderId: {
+type: String,
+default: null
+},   
+   
 totalOtp: {
 type: Number,
 default: 0
