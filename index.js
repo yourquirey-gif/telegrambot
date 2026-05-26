@@ -1232,6 +1232,7 @@ userId: String(ctx.from.id)
 if(user){
 
 user.activeOrder = false;
+ user.activeOrderId = null;  
 
 await user.save();
 
