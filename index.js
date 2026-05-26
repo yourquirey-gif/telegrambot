@@ -985,7 +985,15 @@ now + 5000
 
         // ================= CREDIT CHECK =================
 
-       if(user.activeOrder && user.activeOrderId){
+if(user.activeOrder){
+
+if(!user.activeOrderId){
+
+user.activeOrder = false;
+
+await user.save();
+
+}else{
 
 let checkStatus =
 await callVakApi(
@@ -1003,6 +1011,8 @@ user.activeOrder = false;
 user.activeOrderId = null;
 
 await user.save();
+
+}
 
 }
 
