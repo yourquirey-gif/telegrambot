@@ -415,7 +415,10 @@ country: countryId
 }
 }
 );
-
+console.log(
+"PRICE RESPONSE =",
+response.data
+);
 console.log("PRICE RESPONSE =", response.data);
 
 const usdtPrice =
