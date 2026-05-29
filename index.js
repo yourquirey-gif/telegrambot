@@ -422,10 +422,24 @@ response.data
 console.log("PRICE RESPONSE =", response.data);
 
 const usdtPrice =
-Number(response.data?.price || 0);
+Number(
+response.data?.[countryId]?.[service]?.cost || 0
+);
+console.log(
+"USDT PRICE =",
+usdtPrice
+);   
 
 if(!usdtPrice){
-return 3;
+
+console.log(
+"PRICE NOT FOUND",
+countryId,
+service
+);
+
+return 1;
+
 }
 
 const inrPrice =
