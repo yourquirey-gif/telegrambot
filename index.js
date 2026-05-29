@@ -194,6 +194,7 @@ const Device = mongoose.model(
 );
 const cooldowns = new Map();
 const stockCache = new Map();
+const priceCache = new Map();
 
 let maintenanceMode = false;
 
@@ -323,11 +324,122 @@ async function sendLog(message){
 
 }
 
+// ================= Live Price fetech USDT  =================
+
+async function getUsdtRate(){
+
+try{
+
+const res = await axios.get(
+"https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=inr"
+);
+
+return Number(
+res.data.tether.inr
+);
+
+}catch(err){
+
+console.log(err);
+
+return null;
+
+}
+
+}
+
+async function getDynamicCredits(
+service,
+countryId
+){
+
+const cacheKey =
+`${service}_${countryId}`;
+
+if(priceCache.has(cacheKey)){
+
+const cached =
+priceCache.get(cacheKey);
+
+if(Date.now() < cached.expire){
+
+return cached.price;
+
+}
+
+}
+
+try{
+
+const data =
+await callVakApi(
+"getPrices",
+{
+service,
+country: countryId
+}
+);
+
+const usdtRate =
+await getUsdtRate();
+
+if(!usdtRate){
+return 1;
+}
+
+let usdtPrice = 0;
+
+if(
+data &&
+data[countryId] &&
+data[countryId][service]
+){
+
+usdtPrice =
+Number(
+data[countryId][service].cost
+);
+
+}
+
+const inrCost =
+usdtPrice * usdtRate;
+
+const finalPrice =
+inrCost + 10;
+
+const credits =
+Math.max(
+1,
+Math.ceil(finalPrice / 5)
+);
+
+priceCache.set(
+cacheKey,
+{
+price: credits,
+expire:
+Date.now() + 30000
+}
+);
+
+return credits;
+
+}catch(err){
+
+console.log(err);
+
+return 1;
+
+}
+
+}
+
 // ================= API HELPER =================
 
 async function callVakApi(action, params = {}) {
 
-    try {
+try {
 
         const url = "https://vak-sms.com/stubs/handler_api.php";
 
@@ -796,17 +908,9 @@ const skip =
 let countries =
 await Country.find();
 
-countries.sort((a,b)=>{
-
-const aPrice =
-a.servicePrices[service] || 999;
-
-const bPrice =
-b.servicePrices[service] || 999;
-
-return aPrice - bPrice;
-
-});
+countries.sort((a,b)=>
+a.name.localeCompare(b.name)
+);
 
 countries =
 countries.slice(skip, skip + limit);
@@ -880,11 +984,17 @@ Date.now() + 30000
 
 }
 
+const dynamicPrice =
+await getDynamicCredits(
+service,
+c.countryId
+);
+
 buttons.push([
 
 Markup.button.callback(
-`${c.name}  💎${c.servicePrices[service] || 1}  📦${stock}`,
-`select_country_${service}_${c.countryId}_${c.countryCode}_${c.servicePrices[service] || 1}`
+`${c.name}  💎${dynamicPrice}  📦${stock}`,
+`select_country_${service}_${c.countryId}_${c.countryCode}_${dynamicPrice}`
 )
 
 ]);
