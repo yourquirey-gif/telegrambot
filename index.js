@@ -416,11 +416,13 @@ country: countryId
 }
 );
 
+console.log("PRICE RESPONSE =", response.data);
+
 const usdtPrice =
 Number(response.data?.price || 0);
 
 if(!usdtPrice){
-return 1;
+return 3;
 }
 
 const inrPrice =
