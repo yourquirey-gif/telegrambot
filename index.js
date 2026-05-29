@@ -226,6 +226,24 @@ return false;
 
 }
 
+let usdtRate = 86;
+
+async function loadUsdtRate(){
+
+const setting =
+await Setting.findOne({
+key: "usdtRate"
+});
+
+if(setting){
+
+usdtRate =
+Number(setting.value);
+
+}
+
+}
+
 async function loadDefaultForce(){
 
    const exists =
@@ -270,6 +288,20 @@ let creditSettings = {
     minimumCredits: 10,
     contact: "@Quiressupportotpbot"
        };
+
+const settingSchema = new mongoose.Schema({
+
+   key: String,
+
+   value: mongoose.Schema.Types.Mixed
+
+});
+
+const Setting = mongoose.model(
+   "Setting",
+   settingSchema
+);
+loadUsdtRate();
 
    const BONUS_SETTINGS = {
 
@@ -324,117 +356,6 @@ async function sendLog(message){
 
 }
 
-// ================= Live Price fetech USDT  =================
-
-async function getUsdtRate(){
-
-try{
-
-const res = await axios.get(
-"https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=inr"
-);
-
-return Number(
-res.data.tether.inr
-);
-
-}catch(err){
-
-console.log(err);
-
-return null;
-
-}
-
-}
-
-async function getDynamicCredits(
-service,
-countryId
-){
-
-const cacheKey =
-`${service}_${countryId}`;
-
-if(priceCache.has(cacheKey)){
-
-const cached =
-priceCache.get(cacheKey);
-
-if(Date.now() < cached.expire){
-
-return cached.price;
-
-}
-
-}
-
-try{
-
-const data =
-await callVakApi(
-"getPrices",
-{
-service,
-country: countryId
-}
-);
-
-const usdtRate =
-await getUsdtRate();
-
-if(!usdtRate){
-return 1;
-}
-
-let usdtPrice = 0;
-
-if(
-data &&
-data[countryId] &&
-data[countryId][service]
-){
-
-usdtPrice =
-Number(
-data[countryId][service].cost
-);
-
-}
-
-const inrCost =
-usdtPrice * usdtRate;
-
-const finalPrice =
-inrCost + 10;
-
-const credits =
-Math.max(
-1,
-Math.ceil(finalPrice / 5)
-);
-
-priceCache.set(
-cacheKey,
-{
-price: credits,
-expire:
-Date.now() + 30000
-}
-);
-
-return credits;
-
-}catch(err){
-
-console.log(err);
-
-return 1;
-
-}
-
-}
-
 // ================= API HELPER =================
 
 async function callVakApi(action, params = {}) {
@@ -461,6 +382,80 @@ try {
 
         return "ERROR";
     }
+}
+
+// ================= Automatic Price Feteching System =================
+
+async function getDynamicCredits(service, countryId){
+
+const cacheKey = `${service}_${countryId}`;
+
+if(priceCache.has(cacheKey)){
+
+const cached = priceCache.get(cacheKey);
+
+if(Date.now() < cached.expire){
+return cached.price;
+}
+
+priceCache.delete(cacheKey);
+
+}
+
+try{
+
+const response = await axios.get(
+"https://vak-sms.com/stubs/handler_api.php",
+{
+params:{
+api_key: VAK_API_KEY,
+action: "getPrices",
+service,
+country: countryId
+}
+}
+);
+
+const usdtPrice =
+Number(response.data?.price || 0);
+
+if(!usdtPrice){
+return 1;
+}
+
+const inrPrice =
+usdtPrice * usdtRate;
+
+const finalInr =
+inrPrice + 10;
+
+const credits =
+Math.max(
+1,
+Math.ceil(finalInr / 5)
+);
+
+priceCache.set(
+cacheKey,
+{
+price: credits,
+expire: Date.now() + 300000
+}
+);
+
+return credits;
+
+}catch(err){
+
+console.log(
+"Dynamic Price Error:",
+err.message
+);
+
+return 3;
+
+}
+
 }
 
 
@@ -1752,6 +1747,56 @@ ${username}`
 
 });
 
+bot.command("setusdt", async(ctx)=>{
+
+if(!(await isAdmin(ctx.from.id)))
+return;
+
+const rate =
+Number(
+ctx.message.text.split(" ")[1]
+);
+
+if(!rate){
+
+return ctx.reply(
+
+`❌ Example:
+
+/setusdt 86`
+
+);
+
+}
+
+usdtRate = rate;
+
+await Setting.findOneAndUpdate(
+
+{
+key:"usdtRate"
+},
+
+{
+value: rate
+},
+
+{
+upsert:true
+}
+
+);
+
+ctx.reply(
+
+`✅ USDT Rate Updated
+
+💵 1 USDT = ₹${rate}`
+
+);
+
+});
+
 bot.command("addcredit", async (ctx) => {
     if(!(await isAdmin(ctx.from.id))) return ctx.reply("❌ Admin only");
     const args = ctx.message.text.split(" ");
@@ -2610,6 +2655,13 @@ Markup.button.callback(
 
 [
 Markup.button.callback(
+"💵 Set USDT",
+"admin_setusdt"
+)
+],   
+
+[
+Markup.button.callback(
 "👤 Change Contact",
 "admin_setcontact"
 )
@@ -3094,6 +3146,20 @@ bot.action("admin_setprice", async(ctx)=>{
 
 });
 
+bot.action("admin_setusdt", async(ctx)=>{
+
+if(!(await isAdmin(ctx.from.id)))
+return;
+
+ctx.reply(
+
+`💵 Use Command:
+
+/setusdt 86`
+
+);
+
+});
 bot.action("admin_setminimum", async(ctx)=>{
 
     if(!(await isAdmin(ctx.from.id)))
