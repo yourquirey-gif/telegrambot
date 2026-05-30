@@ -999,6 +999,7 @@ Date.now() + 30000
 }
 
 const dynamicPrice =
+c.servicePrices?.[service] ||
 await getDynamicCredits(
 service,
 c.countryId
