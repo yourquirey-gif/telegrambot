@@ -172,6 +172,22 @@ const Service = mongoose.model(
     "Service",
     serviceSchema
 );
+
+const taskSchema = new mongoose.Schema({
+
+   taskId: Number,
+
+   channel: String,
+
+   credits: Number
+
+});
+
+const Task = mongoose.model(
+   "Task",
+   taskSchema
+);
+
 const deviceSchema = new mongoose.Schema({
 
     userId: String,
@@ -310,14 +326,6 @@ loadUsdtRate();
    newUserBonus: 3
 
 };
-
-// ================= USERS =================
-
-
-
-// ================= TASKS =================
-
-let tasks = [];
 
 // ================= CHECK ADMIN =================
 
@@ -1569,17 +1577,56 @@ ${BONUS_SETTINGS.referralBonus} credits
    });
 
 bot.action("tasks", async(ctx)=>{
-   if(await checkMaintenance(ctx)) return;
-    if(tasks.length === 0) return ctx.reply("❌ No tasks available");
-    let buttons = tasks.map(t => [Markup.button.url(`🎁 Earn ${t.credits}💎`, t.channel), Markup.button.callback("✅ Claim", `claim_${t.id}`)]);
-    ctx.reply(`🎁 TASKS\n\nComplete tasks and earn credits`, Markup.inlineKeyboard(buttons));
+
+   if(await checkMaintenance(ctx))
+   return;
+
+   const tasks =
+   await Task.find();
+
+   if(tasks.length === 0){
+
+      return ctx.reply(
+         "❌ No tasks available"
+      );
+
+   }
+
+   let buttons =
+   tasks.map(t => [
+
+      Markup.button.url(
+         `🎁 Earn ${t.credits}💎`,
+         t.channel
+      ),
+
+      Markup.button.callback(
+         "✅ Claim",
+         `claim_${t.taskId}`
+      )
+
+   ]);
+
+   ctx.reply(
+
+      "🎁 TASKS\n\nComplete tasks and earn credits",
+
+      Markup.inlineKeyboard(buttons)
+
+   );
+
 });
 
 bot.action(/claim_(.+)/, async(ctx)=>{
    if(await checkMaintenance(ctx)) return;
     const userId = ctx.from.id;
-    const taskId = Number(ctx.match[1]);
-    const task = tasks.find((t)=> t.id === taskId);
+    const taskId =
+Number(ctx.match[1]);
+
+const task =
+await Task.findOne({
+taskId
+});
     if(!task) return ctx.reply("❌ Task not found");
     const user = await User.findOne({
    userId: String(userId)
@@ -1993,12 +2040,43 @@ ${joinLink ? `🔗 Link:\n${joinLink}` : "🌍 Public Channel"}`
 
 });
 bot.command("addtask", async(ctx)=>{
-    if(!(await isAdmin(ctx.from.id))) return;
-    const args = ctx.message.text.split(" ");
-    if(!args[1] || !args[2]) return ctx.reply("❌ Example: /addtask link 5");
-    tasks.push({ id: tasks.length + 1, channel: args[1], credits: Number(args[2]) });
-    ctx.reply(`✅ Task Added`);
+
+    if(!(await isAdmin(ctx.from.id)))
+    return;
+
+    const args =
+    ctx.message.text.split(" ");
+
+    if(!args[1] || !args[2]){
+
+        return ctx.reply(
+            "❌ Example: /addtask link 5"
+        );
+
+    }
+
+    const taskId = Date.now();
+
+    await Task.create({
+
+        taskId,
+
+        channel: args[1],
+
+        credits: Number(args[2])
+
+    });
+
+    ctx.reply(
+
+`✅ Task Added
+
+🆔 ${taskId}`
+
+    );
+
 });
+
 // ================= REMOVE FORCE =================
 
 bot.command("removeforce", async(ctx)=>{
@@ -2054,18 +2132,9 @@ bot.command("removetask", async(ctx)=>{
         );
     }
 
-    const index =
-    tasks.findIndex(
-        (t)=> t.id === taskId
-    );
-
-    if(index === -1){
-        return ctx.reply(
-            "❌ Task not found"
-        );
-    }
-
-    tasks.splice(index, 1);
+    await Task.deleteOne({
+taskId
+});
 
     ctx.reply(
 `✅ Task Removed
@@ -3418,38 +3487,63 @@ bot.command("broadcast", async (ctx) => {
     }
 
     const users =
-    await User.find();
+await User.find();
 
-    let success = 0;
-    let failed = 0;
+let success = 0;
+let failed = 0;
 
-    ctx.reply(
-        `📢 Broadcasting to ${users.length} users...`
-    );
+ctx.reply(
+`📢 Broadcasting to ${users.length} users...`
+);
 
-    for(const user of users){
+const batchSize = 50;
 
-        try{
+for(
+let i = 0;
+i < users.length;
+i += batchSize
+){
 
-            await bot.telegram.sendMessage(
-                user.userId,
-                message,
-                {
-                    parse_mode: "HTML"
-                }
-            );
+const batch =
+users.slice(
+i,
+i + batchSize
+);
 
-            success++;
+const results =
+await Promise.allSettled(
 
-        }catch{
+batch.map(user =>
 
-            failed++;
+bot.telegram.sendMessage(
+user.userId,
+message,
+{
+parse_mode:"HTML"
+}
+)
 
-        }
+)
 
-    }
+);
 
-    ctx.reply(
+results.forEach(r => {
+
+if(r.status === "fulfilled"){
+success++;
+}else{
+failed++;
+}
+
+});
+
+await new Promise(resolve =>
+setTimeout(resolve, 1500)
+);
+
+}
+
+ctx.reply(
 
 `✅ Broadcast Completed
 
@@ -3462,9 +3556,7 @@ ${success}
 ❌ Failed:
 ${failed}`
 
-    );
-
-});
+);
 
 // ================= START BOT =================
 
