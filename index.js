@@ -1837,6 +1837,7 @@ return ctx.reply(
 }
 
 usdtRate = rate;
+   priceCache.clear();
 
 await Setting.findOneAndUpdate(
 
