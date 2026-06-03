@@ -427,8 +427,8 @@ console.log(
 "PRICE RESPONSE =",
 response.data
 );
-console.log("PRICE RESPONSE =", response.data);
-
+   console.log("COUNTRY ID =", countryId);
+console.log("SERVICE =", service);
 const usdtPrice =
 Number(
 response.data?.[countryId]?.[service]?.cost || 0
