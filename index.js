@@ -449,7 +449,8 @@ service
 return 1;
 
 }
-
+   
+console.log("USDT RATE =", usdtRate);
 const inrPrice =
 usdtPrice * usdtRate;
 
