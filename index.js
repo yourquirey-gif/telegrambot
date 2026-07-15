@@ -1318,7 +1318,11 @@ bot.action(/api_otp_(.+)_(.+)_(.+)/, async (ctx) => {
     ctx.answerCbQuery("Checking SMS...");
     
     // Fixed capitalization: getStatus
-    let responseData = await callVakApi('getStatus', { id: orderId });
+    const responseData = await call5SimApi(
+
+    `/user/check/${orderId}`
+
+);
 
     if (responseData && typeof responseData === 'string') {
         responseData = responseData.trim();
