@@ -281,8 +281,10 @@ async function loadDefaultForce(){
 
 // ================= API CONFIG =================
 
-const VAK_API_KEY = process.env.VAK_API_KEY;
-const VAK_BASE_URL = "https://vak-sms.com/v1";
+const FIVESIM_API_KEY = process.env.FIVESIM_API_KEY;
+
+const FIVESIM_BASE =
+"https://5sim.net/v1";
 
 // ================= OWNER =================
 
@@ -366,123 +368,142 @@ async function sendLog(message){
 
 // ================= API HELPER =================
 
-async function callVakApi(action, params = {}) {
+async function call5SimApi(endpoint, method = "GET", data = null) {
 
-try {
+    try {
 
-        const url = "https://vak-sms.com/stubs/handler_api.php";
+        const response = await axios({
 
-        const res = await axios.get(url, {
-            params: {
-                api_key: VAK_API_KEY,
-                action: action,
-                ...params
-            }
+            method,
+
+            url: `${FIVESIM_BASE}${endpoint}`,
+
+            headers: {
+                Authorization: `Bearer ${FIVESIM_API_KEY}`,
+                Accept: "application/json",
+                "Content-Type": "application/json"
+            },
+
+            data
+
         });
 
-        console.log("FULL RESPONSE:", res.data);
+        console.log("5SIM RESPONSE:", response.data);
 
-        return res.data;
+        return response.data;
 
     } catch (err) {
 
-        console.log("FULL ERROR:", err.response?.data || err.message);
+        console.log(
+            "5SIM ERROR:",
+            err.response?.data || err.message
+        );
 
-        return "ERROR";
+        return null;
+
     }
+
 }
 
 // ================= Automatic Price Feteching System =================
 
-async function getDynamicCredits(service, countryId){
+async function getDynamicCredits(product, country) {
 
-const cacheKey = `${service}_${countryId}`;
+    const cacheKey = `${country}_${product}`;
 
-if(priceCache.has(cacheKey)){
+    if (priceCache.has(cacheKey)) {
 
-const cached = priceCache.get(cacheKey);
+        const cached = priceCache.get(cacheKey);
 
-if(Date.now() < cached.expire){
-return cached.price;
-}
+        if (Date.now() < cached.expire) {
+            return cached;
+        }
 
-priceCache.delete(cacheKey);
+        priceCache.delete(cacheKey);
+    }
 
-}
+    try {
 
-try{
+        const response = await call5SimApi(
+            `/guest/prices?country=${country}&product=${product}`
+        );
 
-const response = await axios.get(
-"https://vak-sms.com/stubs/handler_api.php",
-{
-params:{
-api_key: VAK_API_KEY,
-action: "getPrices",
-service,
-country: countryId
-}
-}
-);
-console.log(
-"PRICE RESPONSE =",
-response.data
-);
-   console.log("COUNTRY ID =", countryId);
-console.log("SERVICE =", service);
-const usdtPrice =
-Number(
-response.data?.[countryId]?.[service]?.cost || 0
-);
-console.log(
-"USDT PRICE =",
-usdtPrice
-);   
+        if (
+            !response ||
+            !response[country] ||
+            !response[country][product]
+        ) {
 
-if(!usdtPrice){
+            return {
+                credits: 3,
+                stock: 0
+            };
 
-console.log(
-"PRICE NOT FOUND",
-countryId,
-service
-);
+        }
 
-return 1;
+        const operators = Object.values(
+            response[country][product]
+        );
 
-}
-   
-console.log("USDT RATE =", usdtRate);
-const inrPrice =
-usdtPrice * usdtRate;
+        if (!operators.length) {
 
-const finalInr =
-inrPrice + 10;
+            return {
+                credits: 3,
+                stock: 0
+            };
 
-const credits =
-Math.max(
-1,
-Math.ceil(finalInr / 5)
-);
+        }
 
-priceCache.set(
-cacheKey,
-{
-price: credits,
-expire: Date.now() + 300000
-}
-);
+        const first = operators[0];
 
-return credits;
+        const usdtPrice = Number(first.cost || 0);
 
-}catch(err){
+        const stock = Number(first.count || 0);
 
-console.log(
-"Dynamic Price Error:",
-err.message
-);
+        const inrPrice = usdtPrice * usdtRate;
 
-return 3;
+        const finalPrice = inrPrice + 10;
 
-}
+        const credits = Math.max(
+            1,
+            Math.ceil(finalPrice / creditSettings.pricePerCredit)
+        );
+
+        const result = {
+
+            credits,
+            stock
+
+        };
+
+        priceCache.set(
+
+            cacheKey,
+
+            {
+                ...result,
+                expire: Date.now() + 300000
+            }
+
+        );
+
+        return result;
+
+    } catch (err) {
+
+        console.log(
+            "5SIM PRICE ERROR:",
+            err.message
+        );
+
+        return {
+
+            credits: 3,
+            stock: 0
+
+        };
+
+    }
 
 }
 
@@ -948,78 +969,33 @@ let buttons = [];
    
 for(const c of countries){
 
-let stock = "0";
+const priceData = await getDynamicCredits(
 
-const cacheKey =
-`${service}_${c.countryId}`;
+    service,
 
-if(stockCache.has(cacheKey)){
+    c.countryId
 
-const cached =
-stockCache.get(cacheKey);
-
-if(Date.now() < cached.expire){
-
-stock = cached.stock;
-
-}else{
-
-stockCache.delete(cacheKey);
-
-}
-
-}
-
-if(stock === "0"){
-
-try{
-
-const stockData =
-await callVakApi(
-'getNumbersStatus',
-{
-country: c.countryId
-}
 );
-
-if(
-stockData &&
-typeof stockData === "object"
-){
-
-stock =
-stockData[
-`${service}_0`
-] || "0";
-
-stockCache.set(
-cacheKey,
-{
-stock,
-expire:
-Date.now() + 30000
-}
-);
-
-}
-
-}catch{}
-
-}
 
 const dynamicPrice =
-c.servicePrices?.[service] ||
-await getDynamicCredits(
-service,
-c.countryId
-);
+
+    c.servicePrices?.[service] ||
+
+    priceData.credits;
+
+const stock =
+
+    priceData.stock;
 
 buttons.push([
 
-Markup.button.callback(
-`${c.name}  💎${dynamicPrice}  📦${stock}`,
-`select_country_${service}_${c.countryId}_${c.countryCode}_${dynamicPrice}`
-)
+    Markup.button.callback(
+
+        `${c.name}  💎${dynamicPrice}  📦${stock}`,
+
+        `select_country_${service}_${c.countryId}_${c.countryCode}_${dynamicPrice}`
+
+    )
 
 ]);
 
@@ -1221,29 +1197,18 @@ Please complete or cancel it first.`
         service = service.toLowerCase();
 
         // ================= API REQUEST (FIXED: getNumber with capital N) =================
-        let responseData = await callVakApi('getNumber', {
-            service: service,
-            country: country
-        });
+        
+`/user/buy/activation/${country}/any/${service}`
 
-        if (responseData && typeof responseData === "string") {
-            responseData = responseData.trim();
-        }
+);
 
         console.log(`API Request -> Country: ${country}, Service: ${service}, Response: ${responseData}`);
 
         // ================= SUCCESS RESPONSE =================
-        if (responseData && typeof responseData === "string" && responseData.includes("ACCESS_NUMBER")) {
-            const parts = responseData.split(":");
+            if(responseData && responseData.id){
+            const orderId = responseData.id;
 
-const orderId = parts[1];
-
-user.activeOrder = true;
-user.activeOrderId = orderId;
-
-await user.save();
-
-const phoneNumber = parts[2];
+const phoneNumber = responseData.phone;
 
             return ctx.reply(
 `╔══════════════════════╗
@@ -1252,7 +1217,7 @@ const phoneNumber = parts[2];
 
 🌍 Country ID : ${country}
 ✅ Service : ${service.toUpperCase()}
-📱 Number : <code>+${countryCode} ${phoneNumber.slice(countryCode.length)}</code>
+📱 Number : <code>${phoneNumber}</code>
 🆔 Order ID : <code>${orderId}</code>
 
 ━━━━━━━━━━━━━━━━━━
@@ -1268,29 +1233,41 @@ Then tap refresh to get OTP.`,
             );
         }
         // ================= API ERRORS HANDLING =================
-        else if (responseData && responseData.includes("NO_BALANCE")) {
-            return ctx.reply("❌ API wallet balance low. Please contact Admin.");
-        }
-        else if (responseData && (responseData.includes("NO_NUMBERS") || responseData.includes("NO_NUMBER"))) {
-            return ctx.reply(
-`❌ No numbers available right now.
+ // ================= 5SIM ERROR HANDLING =================
 
-🌍 Country ID : ${country}
-📦 Service : ${service.toUpperCase()}
+else if (!responseData) {
 
-⏳ Try again later or choose another country.`
-            );
-        }
-        else if (responseData && responseData.includes("BAD_KEY")) {
-            return ctx.reply("❌ Invalid API Key configuration.");
-        }
-        else {
-            return ctx.reply(
+    return ctx.reply(
+
+`❌ Failed to connect to 5SIM Server.
+
+Please try again later.`
+
+    );
+
+}
+
+else if (responseData.message) {
+
+    return ctx.reply(
+
+`❌ ${responseData.message}`
+
+    );
+
+}
+
+else {
+
+    return ctx.reply(
+
 `❌ Failed to get number.
-📡 API Response: <code>${responseData || "NULL"}</code>`, 
-                { parse_mode: "HTML" }
-            );
-        }
+
+Unknown error occurred.`
+
+    );
+
+}
 
     } catch (err) {
         console.log("BUY NUMBER ERROR:", err);
