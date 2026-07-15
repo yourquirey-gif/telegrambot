@@ -1146,17 +1146,25 @@ await user.save();
 
 }else{
 
-let checkStatus =
-await callVakApi(
-'getStatus',
-{
-id: user.activeOrderId
-}
+const checkStatus = await call5SimApi(
+
+    `/user/check/${user.activeOrderId}`
+
 );
 
-if(
-!String(checkStatus).includes("STATUS_WAIT_CODE")
-){
+if (
+
+    checkStatus &&
+    checkStatus.status !== "PENDING"
+
+) {
+
+    user.activeOrder = false;
+    user.activeOrderId = null;
+
+    await user.save();
+
+}
 
 user.activeOrder = false;
 user.activeOrderId = null;
@@ -1196,10 +1204,17 @@ Please complete or cancel it first.`
         ctx.answerCbQuery("📡 Searching Number...");
         service = service.toLowerCase();
 
-        // ================= API REQUEST (FIXED: getNumber with capital N) =================
-        
-`/user/buy/activation/${country}/any/${service}`
+       // ================= 5SIM BUY NUMBER =================
 
+const responseData = await call5SimApi(
+
+    `/user/buy/activation/${country}/any/${service}`
+
+);
+
+console.log(
+    "5SIM BUY RESPONSE:",
+    responseData
 );
 
         console.log(`API Request -> Country: ${country}, Service: ${service}, Response: ${responseData}`);
