@@ -1159,13 +1159,6 @@ if (
 
 ) {
 
-    user.activeOrder = false;
-    user.activeOrderId = null;
-
-    await user.save();
-
-}
-
 user.activeOrder = false;
 user.activeOrderId = null;
 
@@ -1224,6 +1217,26 @@ console.log(
             const orderId = responseData.id;
 
 const phoneNumber = responseData.phone;
+               let remaining = "Unknown";
+
+if (responseData.expires) {
+
+    const expire = new Date(responseData.expires);
+
+    const now = new Date();
+
+    const diff = Math.max(
+        0,
+        Math.floor((expire - now) / 1000)
+    );
+
+    const min = Math.floor(diff / 60);
+
+    const sec = diff % 60;
+
+    remaining = `${min}m ${sec}s`;
+
+}
 
             return ctx.reply(
 `╔══════════════════════╗
@@ -1234,6 +1247,7 @@ const phoneNumber = responseData.phone;
 ✅ Service : ${service.toUpperCase()}
 📱 Number : <code>${phoneNumber}</code>
 🆔 Order ID : <code>${orderId}</code>
+⏳ Remaining : ${remaining}
 
 ━━━━━━━━━━━━━━━━━━
 Copy number and use it.
@@ -1241,9 +1255,37 @@ Then tap refresh to get OTP.`,
                 {
                     parse_mode: "HTML",
                     ...Markup.inlineKeyboard([
-                        [Markup.button.callback("🔄 Check OTP", `api_otp_${orderId}_${service}_${price}`)],
-                        [Markup.button.callback("❌ Cancel", `cancel_${orderId}`)]
-                    ])
+
+[
+Markup.button.callback(
+"🚫 Ban Number",
+`ban_${orderId}`
+),
+
+Markup.button.callback(
+"❌ Cancel",
+`cancel_${orderId}`
+)
+
+],
+
+[
+Markup.button.callback(
+"🔄 Check OTP",
+`api_otp_${orderId}_${service}_${price}`
+)
+
+],
+
+[
+Markup.button.callback(
+"🏠 Home",
+"home"
+)
+
+]
+
+])
                 }
             );
         }
@@ -1321,49 +1363,64 @@ bot.action(/api_otp_(.+)_(.+)_(.+)/, async (ctx) => {
     
     // Fixed capitalization: getStatus
     const responseData = await call5SimApi(
-       let remaining = "Unknown";
-
-if(responseData?.expires){
-
-const expire =
-new Date(responseData.expires);
-
-const now =
-new Date();
-
-const diff =
-Math.max(
-0,
-Math.floor(
-(expire-now)/1000
-)
-);
-
-const min =
-Math.floor(diff/60);
-
-const sec =
-diff%60;
-
-remaining =
-`${min}m ${sec}s`;
-
-}
-
     `/user/check/${orderId}`
 
 );
+   let remaining = "Unknown";
 
-    
+if (responseData?.expires) {
 
-    if (
+    const expire = new Date(responseData.expires);
+
+    const now = new Date();
+
+    const diff = Math.max(
+        0,
+        Math.floor((expire - now) / 1000)
+    );
+
+    const min = Math.floor(diff / 60);
+
+    const sec = diff % 60;
+
+    remaining = `${min}m ${sec}s`;
+
+}
+   if (
+
+    responseData?.status === "TIMEOUT" ||
+
+    responseData?.status === "CANCELED" ||
+
+    responseData?.status === "FINISHED"
+
+){
+
+    user.activeOrder = false;
+    user.activeOrderId = null;
+
+    await user.save();
+
+    return ctx.answerCbQuery(
+
+        "⌛ Order Expired",
+
+        {
+            show_alert: true
+        }
+
+    );
+
+}
+if (
 
     responseData &&
     responseData.sms &&
     responseData.sms.length > 0
 
 ) {
-     const smsCode = responseData.sms[0].code;
+     const smsCode =
+responseData.sms.at(-1).code;
 user.totalOtp += 1;
 
        // ================= REFERRAL REWARD AFTER 2 OTP =================
@@ -1417,7 +1474,57 @@ refUser.userId,
        
         await user.save();
        
-        ctx.reply(`╔══════════════════════╗\n 📩 NEW OTP RECEIVED\n╚══════════════════════╝\n\n🔐 OTP : <code>${smsCode}</code>\n\n💎 -${price} Credit Deducted\n💰 Remaining : ${user.credits} credits`, { parse_mode: "HTML" });
+ctx.reply(
+
+`╔══════════════════════╗
+ 📩 OTP RECEIVED
+╚══════════════════════╝
+
+🔐 OTP
+
+<code>${smsCode}</code>
+
+━━━━━━━━━━━━━━━━━━
+
+💎 -${price} Credits
+
+💰 Balance :
+${user.credits}
+
+⏳ Remaining :
+${remaining}`,
+
+{
+
+parse_mode:"HTML",
+
+...Markup.inlineKeyboard([
+
+[
+Markup.button.callback(
+
+"🔄 Check Again",
+
+`api_otp_${orderId}_${service}_${price}`
+
+)
+],
+
+[
+Markup.button.callback(
+
+"✅ Complete Order",
+
+`finish_${orderId}`
+
+)
+]
+
+])
+
+}
+
+);
     }
 else if (
 
@@ -1425,54 +1532,101 @@ else if (
     responseData.status === "PENDING"
 
 ) {
-       ctx.reply(
+     return ctx.answerCbQuery(
 
-`⏳ Waiting for OTP...
+`⏳ Waiting For OTP
 
-Click refresh after a few seconds.`,
+Remaining Time :
+${remaining}`,
 
-Markup.inlineKeyboard([
-
-[
-Markup.button.callback(
-
-"🔄 Refresh Again",
-
-`api_otp_${orderId}_${service}_${price}`
-
-)
-]
-
-])
+{
+show_alert:true
+}
 
 );
     } else {
 
-ctx.reply(
+return ctx.answerCbQuery(
 
 `❌ ${responseData?.status || "Order Expired"}`,
 
-Markup.inlineKeyboard([
-
-[
-Markup.button.callback(
-
-"🔄 Refresh",
-
-`api_otp_${orderId}_${service}_${price}`
-
-)
-]
-
-])
+{
+show_alert:true
+}
 
 );
-
 }
 
 });
 
+// ================= BAN ORDER =================
 
+bot.action(/ban_(.+)/, async (ctx) => {
+
+if(await checkMaintenance(ctx)) return;
+
+const orderId = ctx.match[1];
+
+const user = await User.findOne({
+
+userId: String(ctx.from.id)
+
+});
+
+const responseData = await call5SimApi(
+
+`/user/ban/${orderId}`,
+
+"POST"
+
+);
+
+if (
+
+    responseData &&
+    responseData.status === "BANNED"
+
+){
+
+await user.save();
+
+try{
+
+await ctx.editMessageReplyMarkup({
+
+inline_keyboard:[]
+
+});
+
+}catch{}
+
+return ctx.reply(
+
+`🚫 Number Banned Successfully.
+
+This number will not be issued again.`
+
+);
+   await sendHome(ctx);
+   return;
+
+}
+
+return ctx.answerCbQuery(
+
+responseData?.message ||
+
+"Unable to ban number.",
+
+{
+
+show_alert:true
+
+}
+
+);
+
+});
 
 // ================= CANCEL ORDER (FIXED ACTION) =================
 
@@ -1527,7 +1681,75 @@ ctx.reply(
     await sendHome(ctx);
 });
 
+// ================= COMPLETE ORDER =================
 
+bot.action(/finish_(.+)/, async (ctx) => {
+
+if(await checkMaintenance(ctx)) return;
+
+const orderId = ctx.match[1];
+
+const user = await User.findOne({
+
+userId: String(ctx.from.id)
+
+});
+
+const responseData = await call5SimApi(
+
+`/user/finish/${orderId}`,
+
+"POST"
+
+);
+
+if(
+
+responseData &&
+responseData.status === "FINISHED"
+
+){
+
+user.activeOrder = false;
+user.activeOrderId = null;
+
+await user.save();
+
+try{
+
+await ctx.editMessageReplyMarkup({
+
+inline_keyboard:[]
+
+});
+
+}catch{}
+
+return ctx.reply(
+
+`✅ Order Completed Successfully
+
+🗑 Number Released Successfully.`
+
+);
+
+}
+
+return ctx.answerCbQuery(
+
+responseData?.message ||
+
+"Unable to complete order.",
+
+{
+
+show_alert:true
+
+}
+
+);
+
+});
 
 // ================= CREDITS, REFERRAL, TASKS (Rest of your code) =================
 
