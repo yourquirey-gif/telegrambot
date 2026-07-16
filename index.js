@@ -1315,21 +1315,55 @@ bot.action(/api_otp_(.+)_(.+)_(.+)/, async (ctx) => {
         );
     }
 
-    ctx.answerCbQuery("Checking SMS...");
+   await ctx.answerCbQuery(
+"🔄 Checking OTP..."
+);
     
     // Fixed capitalization: getStatus
     const responseData = await call5SimApi(
+       let remaining = "Unknown";
+
+if(responseData?.expires){
+
+const expire =
+new Date(responseData.expires);
+
+const now =
+new Date();
+
+const diff =
+Math.max(
+0,
+Math.floor(
+(expire-now)/1000
+)
+);
+
+const min =
+Math.floor(diff/60);
+
+const sec =
+diff%60;
+
+remaining =
+`${min}m ${sec}s`;
+
+}
 
     `/user/check/${orderId}`
 
 );
 
-    if (responseData && typeof responseData === 'string') {
-        responseData = responseData.trim();
-    }
+    
 
-    if (responseData && typeof responseData === 'string' && responseData.includes('STATUS_OK')) {
-        const smsCode = responseData.split(':')[1]; 
+    if (
+
+    responseData &&
+    responseData.sms &&
+    responseData.sms.length > 0
+
+) {
+     const smsCode = responseData.sms[0].code;
 user.totalOtp += 1;
 
        // ================= REFERRAL REWARD AFTER 2 OTP =================
@@ -1384,11 +1418,58 @@ refUser.userId,
         await user.save();
        
         ctx.reply(`╔══════════════════════╗\n 📩 NEW OTP RECEIVED\n╚══════════════════════╝\n\n🔐 OTP : <code>${smsCode}</code>\n\n💎 -${price} Credit Deducted\n💰 Remaining : ${user.credits} credits`, { parse_mode: "HTML" });
-    } else if (responseData === 'STATUS_WAIT_CODE') {
-        ctx.reply("⚠️ No OTP yet. Status: Waiting for SMS...", Markup.inlineKeyboard([[Markup.button.callback("🔄 Refresh Again", `api_otp_${orderId}_${service}_${price}`)]]));
-    } else {
-        ctx.reply("⚠️ No OTP received yet or session expired. Try refreshing in a bit.", Markup.inlineKeyboard([[Markup.button.callback("🔄 Refresh", `api_otp_${orderId}_${service}_${price}`)]]));
     }
+else if (
+
+    responseData &&
+    responseData.status === "PENDING"
+
+) {
+       ctx.reply(
+
+`⏳ Waiting for OTP...
+
+Click refresh after a few seconds.`,
+
+Markup.inlineKeyboard([
+
+[
+Markup.button.callback(
+
+"🔄 Refresh Again",
+
+`api_otp_${orderId}_${service}_${price}`
+
+)
+]
+
+])
+
+);
+    } else {
+
+ctx.reply(
+
+`❌ ${responseData?.status || "Order Expired"}`,
+
+Markup.inlineKeyboard([
+
+[
+Markup.button.callback(
+
+"🔄 Refresh",
+
+`api_otp_${orderId}_${service}_${price}`
+
+)
+]
+
+])
+
+);
+
+}
+
 });
 
 
@@ -1401,18 +1482,19 @@ bot.action(/cancel_(.+)/, async (ctx) => {
     const orderId = ctx.match[1];
     
     // Fixed capitalization: setStatus
-    let responseData = await callVakApi('setStatus', { id: orderId, status: '8' });
+    const responseData = await call5SimApi(
 
-    if (responseData && typeof responseData === 'string') {
-        responseData = responseData.trim();
-    }
+    `/user/cancel/${orderId}`
+
+);
 
     ctx.answerCbQuery("Processing...");
     
- if (
-responseData &&
-typeof responseData === 'string' &&
-responseData.includes('ACCESS_CANCEL')
+if (
+
+    responseData &&
+    responseData.status === "CANCELED"
+
 ){
 
 const user =
@@ -1436,7 +1518,9 @@ ctx.reply(
 }else{
 
 ctx.reply(
-"⚠️ Could not cancel order (It might have expired or already processed)."
+
+`❌ ${responseData?.message || "Unable to cancel order."}`
+
 );
 
 }
