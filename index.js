@@ -1707,6 +1707,9 @@ if(
 
 responseData &&
 responseData.status === "FINISHED"
+   await sendHome(ctx);
+
+    return;
 
 ){
 
