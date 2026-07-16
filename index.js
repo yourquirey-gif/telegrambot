@@ -1600,15 +1600,17 @@ inline_keyboard:[]
 
 }catch{}
 
-return ctx.reply(
+await ctx.reply(
 
 `🚫 Number Banned Successfully.
 
 This number will not be issued again.`
 
 );
-   await sendHome(ctx);
-   return;
+
+await sendHome(ctx);
+
+return;
 
 }
 
@@ -1707,10 +1709,7 @@ if(
 
 responseData &&
 responseData.status === "FINISHED"
-   await sendHome(ctx);
-
-    return;
-
+  
 ){
 
 user.activeOrder = false;
@@ -1735,6 +1734,9 @@ return ctx.reply(
 🗑 Number Released Successfully.`
 
 );
+   await sendHome(ctx);
+
+    return;
 
 }
 
