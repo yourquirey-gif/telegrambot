@@ -161,6 +161,24 @@ const Country = mongoose.model(
     countrySchema
 );
 
+const serviceSchema = new mongoose.Schema({
+
+    name: String,
+
+    serviceCode: String,
+
+    country: {
+        type: String,
+        default: "any"
+    },
+
+    operator: {
+        type: String,
+        default: "any"
+    }
+
+});
+
 const Service = mongoose.model(
     "Service",
     serviceSchema
