@@ -2797,15 +2797,15 @@ bot.command("addservice", async(ctx)=>{
     const args =
     ctx.message.text.split(" ");
 
-    if(args.length < 3){
+    if(args.length < 5){
 
-        return ctx.reply(
+    return ctx.reply(
 `❌ Example:
 
-/addservice Telegram tg`
-        );
+/addservice Telegram tg india any`
+    );
 
-    }
+}
 
     const name =
     args[1];
@@ -2824,11 +2824,14 @@ bot.command("addservice", async(ctx)=>{
         );
     }
 
-    await Service.create({
+   await Service.create({
+    name,
+    serviceCode,
+    country,
+    operator
+});
 
-
-    ctx.reply(
-
+ctx.reply(
 `✅ Service Added Successfully
 
 📦 Name :
@@ -2842,7 +2845,6 @@ ${country}
 
 📡 Operator :
 ${operator}`
-
 );
 
 });
