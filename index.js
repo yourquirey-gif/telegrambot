@@ -161,12 +161,13 @@ const Country = mongoose.model(
     countrySchema
 );
 
-const serviceSchema = new mongoose.Schema({
+const name = args[1];
 
-    name: String,
-    serviceCode: String
+const serviceCode = args[2].toLowerCase();
 
-});
+const country = args[3].toLowerCase();
+
+const operator = args[4].toLowerCase();
 
 const Service = mongoose.model(
     "Service",
@@ -1199,11 +1200,49 @@ Please complete or cancel it first.`
 
        // ================= 5SIM BUY NUMBER =================
 
-const responseData = await call5SimApi(
+       const serviceInfo = await Service.findOne({
 
-    `/user/buy/activation/${country}/any/${service}`
+serviceCode: service.toLowerCase()
 
+});
+
+let operator = "any";
+
+if(serviceInfo){
+
+operator = serviceInfo.operator || "any";
+
+}
+       let responseData = await call5SimApi(
+`/user/buy/activation/${country}/${operator}/${service}`
 );
+
+if (
+    !responseData ||
+    responseData.message ||
+    responseData.status === false
+) {
+
+    responseData = await call5SimApi(
+        `/user/buy/activation/${country}/any/${service}`
+    );
+
+}
+       if (responseData?.message) {
+
+    return ctx.reply(
+`❌ ${responseData.message}
+
+━━━━━━━━━━━━━━
+
+🌍 ${country}
+
+📦 ${service.toUpperCase()}
+
+📡 ${operator}`
+    );
+
+}
 
 console.log(
     "5SIM BUY RESPONSE:",
@@ -1213,11 +1252,20 @@ console.log(
         console.log(`API Request -> Country: ${country}, Service: ${service}, Response: ${responseData}`);
 
         // ================= SUCCESS RESPONSE =================
-            if(responseData && responseData.id){
-            const orderId = responseData.id;
 
-const phoneNumber = responseData.phone;
-               let remaining = "Unknown";
+       
+           if(responseData && responseData.id){
+
+    const orderId = responseData.id;
+
+    user.activeOrder = true;
+    user.activeOrderId = String(orderId);
+
+    await user.save();
+
+    const phoneNumber = responseData.phone;
+
+    let remaining = "Unknown";
 
 if (responseData.expires) {
 
@@ -1292,25 +1340,28 @@ Markup.button.callback(
         // ================= API ERRORS HANDLING =================
  // ================= 5SIM ERROR HANDLING =================
 
-else if (!responseData) {
+else if(!responseData){
 
-    return ctx.reply(
+return ctx.reply(
 
-`❌ Failed to connect to 5SIM Server.
+`❌ No Number Available
 
-Please try again later.`
+━━━━━━━━━━━━━━
 
-    );
+🌍 Country :
+${country}
 
-}
+📦 Service :
+${service.toUpperCase()}
 
-else if (responseData.message) {
+📡 Operator :
+${operator}
 
-    return ctx.reply(
+━━━━━━━━━━━━━━
 
-`❌ ${responseData.message}`
+Please try another country or operator.`
 
-    );
+);
 
 }
 
@@ -1727,16 +1778,12 @@ inline_keyboard:[]
 
 }catch{}
 
-return ctx.reply(
+await ctx.reply(`✅ Order Completed Successfully
 
-`✅ Order Completed Successfully
+🗑 Number Released Successfully.`);
 
-🗑 Number Released Successfully.`
-
-);
-   await sendHome(ctx);
-
-    return;
+await sendHome(ctx);
+return;
 
 }
 
@@ -2779,17 +2826,24 @@ bot.command("addservice", async(ctx)=>{
 
     await Service.create({
 
-        name,
-        serviceCode,
-
-    });
 
     ctx.reply(
-`✅ Service Added
 
-📦 ${name}
-🔑 ${serviceCode}`
-    );
+`✅ Service Added Successfully
+
+📦 Name :
+${name}
+
+🔑 Code :
+${serviceCode}
+
+🌍 Country :
+${country}
+
+📡 Operator :
+${operator}`
+
+);
 
 });
 
