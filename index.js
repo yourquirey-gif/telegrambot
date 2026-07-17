@@ -2802,17 +2802,9 @@ const operator = args[4].toLowerCase();
 `❌ Example:
 
 /addservice Telegram tg india any`
-    );
-
+);
 }
-
-    const name =
-    args[1];
-
-    const serviceCode =
-    args[2];
-
-    const already =
+   const already =
     await Service.findOne({
         serviceCode
     });
