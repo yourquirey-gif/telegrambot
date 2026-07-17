@@ -165,16 +165,9 @@ const serviceSchema = new mongoose.Schema({
 
     name: String,
 
-    serviceCode: String,
-
-    country: {
+    serviceCode: {
         type: String,
-        default: "any"
-    },
-
-    operator: {
-        type: String,
-        default: "any"
+        unique: true
     }
 
 });
@@ -182,6 +175,21 @@ const serviceSchema = new mongoose.Schema({
 const Service = mongoose.model(
     "Service",
     serviceSchema
+);
+
+const operatorSchema = new mongoose.Schema({
+
+    serviceCode: String,
+
+    countryId: String,
+
+    operator: String
+
+});
+
+const Operator = mongoose.model(
+    "Operator",
+    operatorSchema
 );
 
 const taskSchema = new mongoose.Schema({
@@ -2801,60 +2809,45 @@ ${price}`
 
 bot.command("addservice", async(ctx)=>{
 
-    if(!(await isAdmin(ctx.from.id)))
-    return;
+    if(!(await isAdmin(ctx.from.id))) return;
 
-    const args =
-    ctx.message.text.split(" ");
-   const name = args[1];
+    const args = ctx.message.text.split(" ");
 
-const serviceCode = args[2].toLowerCase();
+    if(args.length < 3){
 
-const country = args[3].toLowerCase();
+        return ctx.reply(`❌ Example:
 
-const operator = args[4].toLowerCase();
+/addservice Telegram tg`);
 
-    if(args.length < 5){
+    }
 
-    return ctx.reply(
-`❌ Example:
+    const name = args[1];
 
-/addservice Telegram tg india any`
-);
-}
-   const already =
-    await Service.findOne({
+    const serviceCode = args[2].toLowerCase();
+
+    const already = await Service.findOne({
         serviceCode
     });
 
     if(already){
-        return ctx.reply(
-            "❌ Service already exists"
-        );
+
+        return ctx.reply("❌ Service already exists");
+
     }
 
-   await Service.create({
-    name,
-    serviceCode,
-    country,
-    operator
-});
+    await Service.create({
 
-ctx.reply(
-`✅ Service Added Successfully
+        name,
 
-📦 Name :
-${name}
+        serviceCode
 
-🔑 Code :
-${serviceCode}
+    });
 
-🌍 Country :
-${country}
+    ctx.reply(`✅ Service Added
 
-📡 Operator :
-${operator}`
-);
+📦 Name : ${name}
+
+🔑 Code : ${serviceCode}`);
 
 });
 
