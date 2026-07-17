@@ -161,14 +161,6 @@ const Country = mongoose.model(
     countrySchema
 );
 
-const name = args[1];
-
-const serviceCode = args[2].toLowerCase();
-
-const country = args[3].toLowerCase();
-
-const operator = args[4].toLowerCase();
-
 const Service = mongoose.model(
     "Service",
     serviceSchema
@@ -2796,6 +2788,13 @@ bot.command("addservice", async(ctx)=>{
 
     const args =
     ctx.message.text.split(" ");
+   const name = args[1];
+
+const serviceCode = args[2].toLowerCase();
+
+const country = args[3].toLowerCase();
+
+const operator = args[4].toLowerCase();
 
     if(args.length < 5){
 
