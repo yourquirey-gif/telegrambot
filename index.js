@@ -2047,7 +2047,7 @@ bot.on("message", async(ctx, next)=>{
     const userId = String(ctx.from.id);
     const input = paymentInput.get(userId);
     if(!input) return next();
-    if(ctx.message.text?.startsWith("/")) return;
+    if(ctx.message.text?.startsWith("/")) return next();
 
     if(input === "AUTO" || input === "MANUAL"){
         const amount = Number(String(ctx.message.text || "").trim());
