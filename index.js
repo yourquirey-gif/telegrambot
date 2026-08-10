@@ -229,7 +229,6 @@ const Device = mongoose.model(
 );
 const cooldowns = new Map();
 const stockCache = new Map();
-const priceCache = new Map();
 
 let maintenanceMode = false;
 
@@ -298,12 +297,12 @@ async function loadDefaultForce(){
 
  loadDefaultForce();
 
-// ================= API CONFIG =================
+// ================= VAK-SMS API CONFIG =================
 
-const FIVESIM_API_KEY = process.env.FIVESIM_API_KEY;
+const VAKSMS_API_KEY = process.env.VAKSMS_API_KEY;
 
-const FIVESIM_BASE =
-"https://5sim.net/v1";
+const VAKSMS_BASE =
+    "https://vak-sms.com/stubs/handler_api.php";
 
 // ================= OWNER =================
 
@@ -385,36 +384,35 @@ async function sendLog(message){
 
 }
 
-// ================= API HELPER =================
+// ================= VAK-SMS API HELPER =================
 
-async function call5SimApi(endpoint, method = "GET", data = null) {
+async function callVakApi(action, params = {}) {
 
     try {
 
-        const response = await axios({
+        const response = await axios.get(
+            VAKSMS_BASE,
+            {
+                params: {
+                    action,
+                    api_key: VAKSMS_API_KEY,
+                    ...params
+                },
+                timeout: 15000
+            }
+        );
 
-            method,
-
-            url: `${FIVESIM_BASE}${endpoint}`,
-
-            headers: {
-                Authorization: `Bearer ${FIVESIM_API_KEY}`,
-                Accept: "application/json",
-                "Content-Type": "application/json"
-            },
-
-            data
-
-        });
-
-        console.log("5SIM RESPONSE:", response.data);
+        console.log(
+            "VAK-SMS RESPONSE:",
+            response.data
+        );
 
         return response.data;
 
     } catch (err) {
 
         console.log(
-            "5SIM ERROR:",
+            "VAK-SMS ERROR:",
             err.response?.data || err.message
         );
 
@@ -423,110 +421,6 @@ async function call5SimApi(endpoint, method = "GET", data = null) {
     }
 
 }
-
-// ================= Automatic Price Feteching System =================
-
-async function getDynamicCredits(product, country) {
-
-    const cacheKey = `${country}_${product}`;
-
-    if (priceCache.has(cacheKey)) {
-
-        const cached = priceCache.get(cacheKey);
-
-        if (Date.now() < cached.expire) {
-            return cached;
-        }
-
-        priceCache.delete(cacheKey);
-    }
-
-    try {
-
-        const response = await call5SimApi(
-            `/guest/prices?country=${country}&product=${product}`
-        );
-
-        if (
-            !response ||
-            !response[country] ||
-            !response[country][product]
-        ) {
-
-            return {
-                credits: 3,
-                stock: 0
-            };
-
-        }
-
-        const operators = Object.values(
-            response[country][product]
-        );
-
-        if (!operators.length) {
-
-            return {
-                credits: 3,
-                stock: 0
-            };
-
-        }
-
-        const first = operators[0];
-
-        const usdtPrice = Number(first.cost || 0);
-
-        const stock = Number(first.count || 0);
-
-        const inrPrice = usdtPrice * usdtRate;
-
-        const finalPrice = inrPrice + 10;
-
-        const credits = Math.max(
-            1,
-            Math.ceil(finalPrice / creditSettings.pricePerCredit)
-        );
-
-        const result = {
-
-            credits,
-            stock
-
-        };
-
-        priceCache.set(
-
-            cacheKey,
-
-            {
-                ...result,
-                expire: Date.now() + 300000
-            }
-
-        );
-
-        return result;
-
-    } catch (err) {
-
-        console.log(
-            "5SIM PRICE ERROR:",
-            err.message
-        );
-
-        return {
-
-            credits: 3,
-            stock: 0
-
-        };
-
-    }
-
-}
-
-
 // ================= FORCE JOIN CHECK =================
 
 async function checkForceJoin(ctx){
@@ -988,36 +882,26 @@ let buttons = [];
    
 for(const c of countries){
 
-const priceData = await getDynamicCredits(
+    const adminPrice = c.servicePrices?.[service];
 
-    service,
+    // Price admin panel se set nahi hai
+    if(adminPrice === undefined || adminPrice === null){
+        buttons.push([
+            Markup.button.callback(
+                `${c.name}  ⚠️ Price Not Set`,
+                `price_not_set`
+            )
+        ]);
 
-    c.countryId
+        continue;
+    }
 
-);
-
-const dynamicPrice =
-
-    c.servicePrices?.[service] ||
-
-    priceData.credits;
-
-const stock =
-
-    priceData.stock;
-
-buttons.push([
-
-    Markup.button.callback(
-
-        `${c.name}  💎${dynamicPrice}  📦${stock}`,
-
-        `select_country_${service}_${c.countryId}_${c.countryCode}_${dynamicPrice}`
-
-    )
-
-]);
-
+    buttons.push([
+        Markup.button.callback(
+            `${c.name}  💎${adminPrice}`,
+            `select_country_${service}_${c.countryId}_${c.countryCode}_${adminPrice}`
+        )
+    ]);
 }
 
 let nav = [];
