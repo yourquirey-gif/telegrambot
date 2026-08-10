@@ -2042,7 +2042,7 @@ bot.action(/check_payment_(.+)/, async(ctx)=>{
 
 // ================= PAYMENT MESSAGE HANDLER =================
 
-bot.on("message", async(ctx)=>{
+bot.on("message", async(ctx, next)=>{
     if(!ctx.from) return;
     const userId = String(ctx.from.id);
     const input = paymentInput.get(userId);
