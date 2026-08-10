@@ -1,7 +1,6 @@
 {
   "name": "bottg",
   "version": "1.0.0",
-  "qrcode": "^1.5.4"
   "description": "Telegram OTP Monitor Bot",
   "main": "index.js",
   "scripts": {
@@ -23,7 +22,8 @@
     "mongoose": "^8.15.1",
     "telegraf": "^4.16.3",
     "express": "^4.19.2",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "qrcode": "^1.5.4"
   },
   "repository": {
     "type": "git",
