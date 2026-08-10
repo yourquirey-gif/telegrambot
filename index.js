@@ -9,6 +9,7 @@ const { Telegraf, Markup } = require("telegraf");
 const axios = require("axios");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
+const QRCode = require("qrcode");
 
 mongoose.connect(process.env.MONGO_URI)
 .then(() => {
@@ -337,6 +338,78 @@ const Setting = mongoose.model(
    "Setting",
    settingSchema
 );
+
+// ================= PAYMENT SYSTEM =================
+
+const paymentSchema = new mongoose.Schema({
+    paymentId: { type: String, unique: true },
+    userId: String,
+    amount: Number,
+    credits: Number,
+    method: { type: String, enum: ["AUTO", "MANUAL"], default: "MANUAL" },
+    paymentNote: String,
+    status: {
+        type: String,
+        enum: ["PENDING", "SUBMITTED", "APPROVED", "REJECTED", "EXPIRED", "CANCELED"],
+        default: "PENDING"
+    },
+    screenshotFileId: { type: String, default: null },
+    adminId: { type: String, default: null },
+    rejectReason: { type: String, default: null },
+    createdAt: { type: Date, default: Date.now },
+    expiresAt: Date
+});
+
+const Payment = mongoose.model("Payment", paymentSchema);
+
+let paymentSettings = {
+    upiId: "",
+    merchantName: "NexoSMM"
+};
+
+async function loadPaymentSettings(){
+    const upi = await Setting.findOne({ key: "paymentUpiId" });
+    const merchant = await Setting.findOne({ key: "paymentMerchantName" });
+    if(upi) paymentSettings.upiId = String(upi.value || "");
+    if(merchant) paymentSettings.merchantName = String(merchant.value || "NexoSMM");
+}
+loadPaymentSettings();
+
+function makePaymentId(){
+    return `NEXO-${Date.now().toString().slice(-6)}${Math.floor(Math.random()*90+10)}`;
+}
+
+function makePaymentNote(){
+    return `NEXO-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+}
+
+function makeUpiUri(amount, note){
+    return `upi://pay?pa=${encodeURIComponent(paymentSettings.upiId)}&pn=${encodeURIComponent(paymentSettings.merchantName)}&am=${encodeURIComponent(Number(amount).toFixed(2))}&cu=INR&tn=${encodeURIComponent(note)}`;
+}
+
+async function createPaymentQr(amount, note){
+    if(!paymentSettings.upiId) throw new Error("UPI ID is not configured");
+    return QRCode.toBuffer(makeUpiUri(amount, note), { width: 700, margin: 2 });
+}
+
+async function expirePayment(paymentId){
+    const payment = await Payment.findOne({ paymentId });
+    if(!payment) return;
+    if(["APPROVED","REJECTED","CANCELED","EXPIRED"].includes(payment.status)) return;
+    if(new Date() < payment.expiresAt) return;
+
+    payment.status = "EXPIRED";
+    await payment.save();
+
+    try{
+        await bot.telegram.sendMessage(
+            payment.userId,
+            `⌛ PAYMENT EXPIRED\n\n❌ This payment request has expired.\n\nPlease generate a new QR/payment request.`,
+            Markup.inlineKeyboard([[Markup.button.callback("🔄 Generate New QR", "auto_payment")]])
+        );
+    }catch{}
+}
+
 loadUsdtRate();
 
    const BONUS_SETTINGS = {
@@ -1769,29 +1842,380 @@ Markup.button.callback(
 
 bot.action("buy", async(ctx)=>{
 
-   if(await checkMaintenance(ctx)) return;
+    if(await checkMaintenance(ctx)) return;
 
-   ctx.reply(
+    ctx.reply(
+`💎 ADD CREDITS
 
-`💎 Buy Credits
+💰 Price : ₹${creditSettings.pricePerCredit}/credit
 
-👤 Contact : ${creditSettings.contact}
+Choose your payment method:`,
+    Markup.inlineKeyboard([
+        [Markup.button.callback("⚡ Auto Approve Payment", "auto_payment")],
+        [Markup.button.callback("📝 Pay by Bot", "manual_payment")],
+        [Markup.button.callback("🏠 Home", "home")]
+    ])
+    );
+});
 
-⚡ Price : ₹${creditSettings.pricePerCredit}/credit`,
+// ================= PAYMENT INPUT =================
 
-Markup.inlineKeyboard([
+const paymentInput = new Map();
 
-[
-Markup.button.url(
-"👤 Contact Admin",
-`https://t.me/${creditSettings.contact.replace("@","")}`
-)
-]
+async function askPaymentAmount(ctx, method){
+    if(await checkMaintenance(ctx)) return;
 
-])
+    paymentInput.set(String(ctx.from.id), method);
 
-);
+    await ctx.reply(
+`💳 ${method === "AUTO" ? "AUTO APPROVE PAYMENT" : "PAY BY BOT"}
 
+Enter the amount you want to pay in INR.
+
+Example: 10
+
+💰 Rate: ₹${creditSettings.pricePerCredit} = 1 credit`,
+    Markup.inlineKeyboard([[Markup.button.callback("❌ Cancel", "buy")]])
+    );
+}
+
+bot.action("auto_payment", async(ctx)=> askPaymentAmount(ctx, "AUTO"));
+bot.action("manual_payment", async(ctx)=> askPaymentAmount(ctx, "MANUAL"));
+
+bot.action(/payment_cancel_(.+)/, async(ctx)=>{
+    const paymentId = ctx.match[1];
+    const payment = await Payment.findOne({ paymentId, userId: String(ctx.from.id) });
+
+    if(payment && ["PENDING","SUBMITTED"].includes(payment.status)){
+        payment.status = "CANCELED";
+        await payment.save();
+    }
+
+    paymentInput.delete(String(ctx.from.id));
+    await ctx.answerCbQuery("Payment canceled");
+    return ctx.reply("❌ Payment canceled.", Markup.inlineKeyboard([
+        [Markup.button.callback("🛒 Add Credits", "buy")],
+        [Markup.button.callback("🏠 Home", "home")]
+    ]));
+});
+
+// ================= AUTO QR PAYMENT =================
+
+async function sendAutoPayment(ctx, amount, credits){
+    if(!paymentSettings.upiId){
+        return ctx.reply(`❌ Auto payment is not configured yet.\n\nPlease contact admin: ${creditSettings.contact}`);
+    }
+
+    const paymentId = makePaymentId();
+    const note = makePaymentNote();
+    const expiresAt = new Date(Date.now() + 3 * 60 * 1000);
+
+    await Payment.create({ paymentId, userId: String(ctx.from.id), amount, credits, method:"AUTO", paymentNote:note, status:"PENDING", expiresAt });
+
+    const qr = await createPaymentQr(amount, note);
+
+    await ctx.replyWithPhoto(
+        { source: qr },
+        {
+            caption:
+`💎 UPI AUTO PAYMENT
+
+💰 Amount To Pay
+₹${amount.toFixed(2)}
+
+🆔 Payment ID
+${paymentId}
+
+📝 Payment Note
+${note}
+
+👤 Merchant
+${paymentSettings.merchantName}
+
+🏦 UPI ID
+${paymentSettings.upiId}
+
+⚠️ IMPORTANT
+
+✅ Pay exactly ₹${amount.toFixed(2)}
+✅ Don't change the payment note
+✅ QR expires in 3 minutes`,
+            ...Markup.inlineKeyboard([
+                [Markup.button.callback("🔄 Check Payment", `check_payment_${paymentId}`)],
+                [Markup.button.callback("❌ Cancel", `payment_cancel_${paymentId}`)]
+            ])
+        }
+    );
+
+    setTimeout(()=>expirePayment(paymentId), 3 * 60 * 1000 + 2000);
+}
+
+// ================= MANUAL PAYMENT =================
+
+async function sendManualPayment(ctx, amount, credits){
+    if(!paymentSettings.upiId){
+        return ctx.reply(`❌ Payment UPI is not configured yet.\n\nPlease contact admin: ${creditSettings.contact}`);
+    }
+
+    const paymentId = makePaymentId();
+    const note = makePaymentNote();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await Payment.create({ paymentId, userId: String(ctx.from.id), amount, credits, method:"MANUAL", paymentNote:note, status:"PENDING", expiresAt });
+
+    await ctx.reply(
+`📝 PAY BY BOT
+
+💰 Amount To Pay
+₹${amount.toFixed(2)}
+
+🆔 Payment ID
+${paymentId}
+
+📝 Payment Note
+${note}
+
+👤 Merchant
+${paymentSettings.merchantName}
+
+🏦 UPI ID
+${paymentSettings.upiId}
+
+⚠️ IMPORTANT
+
+✅ Pay exactly ₹${amount.toFixed(2)}
+✅ Don't change the payment note
+✅ After payment click I Have Paid
+✅ Send payment screenshot when asked
+
+⏳ This request expires in 10 minutes.`,
+    Markup.inlineKeyboard([
+        [Markup.button.callback("✅ I Have Paid", `manual_paid_${paymentId}`)],
+        [Markup.button.callback("❌ Cancel", `payment_cancel_${paymentId}`)]
+    ])
+    );
+
+    setTimeout(()=>expirePayment(paymentId), 10 * 60 * 1000 + 2000);
+}
+
+bot.action(/manual_paid_(.+)/, async(ctx)=>{
+    const paymentId = ctx.match[1];
+    const payment = await Payment.findOne({ paymentId, userId: String(ctx.from.id) });
+
+    if(!payment || payment.status !== "PENDING")
+        return ctx.answerCbQuery("❌ Payment request expired or already processed", {show_alert:true});
+
+    if(new Date() >= payment.expiresAt){
+        await expirePayment(paymentId);
+        return ctx.answerCbQuery("⌛ Payment expired", {show_alert:true});
+    }
+
+    payment.status = "SUBMITTED";
+    await payment.save();
+    paymentInput.set(String(ctx.from.id), `SCREENSHOT:${paymentId}`);
+
+    return ctx.reply(
+`📸 SEND PAYMENT SCREENSHOT
+
+🆔 Payment ID: ${paymentId}
+💰 Amount: ₹${payment.amount}
+
+Send your payment screenshot here.
+
+⏳ Admin verification ke baad credits add honge.`,
+    Markup.inlineKeyboard([[Markup.button.callback("❌ Cancel", `payment_cancel_${paymentId}`)]])
+    );
+});
+
+// ================= AUTO PAYMENT CHECK =================
+
+bot.action(/check_payment_(.+)/, async(ctx)=>{
+    const paymentId = ctx.match[1];
+    const payment = await Payment.findOne({ paymentId, userId: String(ctx.from.id) });
+
+    if(!payment) return ctx.answerCbQuery("❌ Payment not found", {show_alert:true});
+    if(payment.status === "APPROVED") return ctx.answerCbQuery("✅ Payment approved", {show_alert:true});
+    if(payment.status === "EXPIRED") return ctx.answerCbQuery("⌛ QR expired. Generate a new QR.", {show_alert:true});
+
+    return ctx.answerCbQuery("⏳ Payment verification pending.", {show_alert:true});
+});
+
+// ================= PAYMENT MESSAGE HANDLER =================
+
+bot.on("message", async(ctx)=>{
+    if(!ctx.from) return;
+    const userId = String(ctx.from.id);
+    const input = paymentInput.get(userId);
+    if(!input) return;
+    if(ctx.message.text?.startsWith("/")) return;
+
+    if(input === "AUTO" || input === "MANUAL"){
+        const amount = Number(String(ctx.message.text || "").trim());
+        if(!Number.isFinite(amount) || amount <= 0)
+            return ctx.reply("❌ Enter a valid amount. Example: 10");
+
+        const pricePerCredit = Number(creditSettings.pricePerCredit);
+        const credits = amount / pricePerCredit;
+
+        if(!Number.isInteger(credits)){
+            return ctx.reply(`❌ Invalid amount.\n\nAmount must be a multiple of ₹${pricePerCredit}.\nExample: ${pricePerCredit * 2}`);
+        }
+
+        paymentInput.delete(userId);
+        return input === "AUTO"
+            ? sendAutoPayment(ctx, amount, credits)
+            : sendManualPayment(ctx, amount, credits);
+    }
+
+    if(String(input).startsWith("SCREENSHOT:")){
+        if(!ctx.message.photo)
+            return ctx.reply("📸 Please send the payment screenshot as an image.");
+
+        const paymentId = String(input).split(":")[1];
+        const payment = await Payment.findOne({ paymentId, userId });
+
+        if(!payment || payment.status !== "SUBMITTED"){
+            paymentInput.delete(userId);
+            return ctx.reply("❌ Payment request is no longer active.");
+        }
+
+        if(new Date() >= payment.expiresAt){
+            paymentInput.delete(userId);
+            await expirePayment(paymentId);
+            return ctx.reply("⌛ Payment expired. Please create a new payment request.");
+        }
+
+        const photo = ctx.message.photo.at(-1);
+        payment.screenshotFileId = photo.file_id;
+        await payment.save();
+        paymentInput.delete(userId);
+
+        await ctx.reply(`✅ Payment request submitted.\n\n🆔 ${payment.paymentId}\n💰 ₹${payment.amount}\n\n⏳ Admin verification pending.`);
+
+        const adminIds = [String(OWNER_ID)];
+        const admins = await Admin.find();
+        admins.forEach(a=>{ if(!adminIds.includes(String(a.userId))) adminIds.push(String(a.userId)); });
+
+        for(const adminId of adminIds){
+            try{
+                await bot.telegram.sendPhoto(
+                    adminId,
+                    photo.file_id,
+                    {
+                        caption:
+`💳 NEW PAYMENT REQUEST
+
+🆔 Payment ID: ${payment.paymentId}
+👤 User ID: ${payment.userId}
+💰 Amount: ₹${payment.amount}
+💎 Credits: ${payment.credits}
+📝 Note: ${payment.paymentNote}
+
+⚠️ Verify payment before approving.`,
+                        ...Markup.inlineKeyboard([[
+                            Markup.button.callback("✅ Approve", `approve_payment_${payment.paymentId}`),
+                            Markup.button.callback("❌ Reject", `reject_payment_${payment.paymentId}`)
+                        ]])
+                    }
+                );
+            }catch{}
+        }
+    }
+});
+
+// ================= PAYMENT ADMIN APPROVAL =================
+
+bot.action(/approve_payment_(.+)/, async(ctx)=>{
+    if(!(await isAdmin(ctx.from.id))) return;
+
+    const paymentId = ctx.match[1];
+    const payment = await Payment.findOne({ paymentId });
+    if(!payment) return ctx.answerCbQuery("❌ Payment not found", {show_alert:true});
+    if(payment.status !== "SUBMITTED" && payment.status !== "PENDING")
+        return ctx.answerCbQuery(`❌ Already ${payment.status}`, {show_alert:true});
+
+    const user = await User.findOne({ userId: payment.userId });
+    if(!user) return ctx.answerCbQuery("❌ User not found", {show_alert:true});
+
+    // Double-approval protection: status is checked before crediting.
+    user.credits += payment.credits;
+    await user.save();
+
+    payment.status = "APPROVED";
+    payment.adminId = String(ctx.from.id);
+    await payment.save();
+
+    await ctx.answerCbQuery("✅ Payment approved");
+    try{ await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); }catch{}
+
+    try{
+        await bot.telegram.sendMessage(payment.userId,
+`🎉 PAYMENT APPROVED
+
+🆔 Payment ID: ${payment.paymentId}
+💰 Paid: ₹${payment.amount}
+💎 Credits Added: +${payment.credits}
+
+💰 New Balance: ${user.credits} credits`);
+    }catch{}
+
+    return ctx.reply(`✅ Payment approved\n\n👤 User: ${payment.userId}\n💰 ₹${payment.amount}\n💎 +${payment.credits} credits`);
+});
+
+bot.action(/reject_payment_(.+)/, async(ctx)=>{
+    if(!(await isAdmin(ctx.from.id))) return;
+
+    const paymentId = ctx.match[1];
+    const payment = await Payment.findOne({ paymentId });
+    if(!payment) return ctx.answerCbQuery("❌ Payment not found", {show_alert:true});
+    if(payment.status !== "SUBMITTED" && payment.status !== "PENDING")
+        return ctx.answerCbQuery(`❌ Already ${payment.status}`, {show_alert:true});
+
+    payment.status = "REJECTED";
+    payment.adminId = String(ctx.from.id);
+    payment.rejectReason = "Payment could not be verified";
+    await payment.save();
+
+    await ctx.answerCbQuery("❌ Payment rejected");
+    try{ await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); }catch{}
+    try{
+        await bot.telegram.sendMessage(payment.userId,
+`❌ PAYMENT REJECTED
+
+🆔 Payment ID: ${payment.paymentId}
+💰 Amount: ₹${payment.amount}
+
+Payment could not be verified. Please contact admin if you believe this is an error.`);
+    }catch{}
+
+    return ctx.reply(`❌ Payment rejected\n\n🆔 ${payment.paymentId}`);
+});
+
+// ================= PAYMENT SETTINGS =================
+
+bot.command("setupi", async(ctx)=>{
+    if(!(await isAdmin(ctx.from.id))) return ctx.reply("❌ Admin only");
+    const upiId = ctx.message.text.split(" ")[1];
+    if(!upiId) return ctx.reply("❌ Example: /setupi yourupi@bank");
+
+    paymentSettings.upiId = upiId;
+    await Setting.findOneAndUpdate({key:"paymentUpiId"},{value:upiId},{upsert:true});
+    return ctx.reply(`✅ Payment UPI ID Updated\n\n🏦 ${upiId}`);
+});
+
+bot.command("setmerchant", async(ctx)=>{
+    if(!(await isAdmin(ctx.from.id))) return ctx.reply("❌ Admin only");
+    const merchantName = ctx.message.text.split(" ").slice(1).join(" ").trim();
+    if(!merchantName) return ctx.reply("❌ Example: /setmerchant NexoSMM");
+
+    paymentSettings.merchantName = merchantName;
+    await Setting.findOneAndUpdate({key:"paymentMerchantName"},{value:merchantName},{upsert:true});
+    return ctx.reply(`✅ Merchant Name Updated\n\n👤 ${merchantName}`);
+});
+
+bot.command("paymentsettings", async(ctx)=>{
+    if(!(await isAdmin(ctx.from.id))) return ctx.reply("❌ Admin only");
+    return ctx.reply(`💳 PAYMENT SETTINGS\n\n🏦 UPI ID: ${paymentSettings.upiId || "Not Set"}\n👤 Merchant: ${paymentSettings.merchantName}\n⏱ Auto QR Expiry: 3 minutes\n⏱ Manual Payment Expiry: 10 minutes`);
 });
 
 bot.action("referral", async(ctx)=>{
@@ -2929,6 +3353,20 @@ Markup.button.callback(
 
 [
 Markup.button.callback(
+"💳 Payment Requests",
+"admin_payments"
+)
+],
+
+[
+Markup.button.callback(
+"⚙️ Payment Settings",
+"admin_payment_settings"
+)
+],
+
+[
+Markup.button.callback(
 "💎 Add Credit",
 "admin_addcredit"
 ),
@@ -3155,6 +3593,28 @@ ${amount}`
 
     );
 
+});
+
+bot.action("admin_payments", async(ctx)=>{
+    if(!(await isAdmin(ctx.from.id))) return;
+
+    const payments = await Payment.find({status:{$in:["PENDING","SUBMITTED"]}}).sort({createdAt:-1}).limit(20);
+    if(!payments.length) return ctx.reply("💳 PAYMENT REQUESTS\n\n✅ No pending payment requests.");
+
+    for(const p of payments){
+        await ctx.reply(
+`🆔 ${p.paymentId}\n👤 User: ${p.userId}\n💰 Amount: ₹${p.amount}\n💎 Credits: ${p.credits}\n📝 Note: ${p.paymentNote}\n📌 Status: ${p.status}`,
+        Markup.inlineKeyboard([[
+            Markup.button.callback("✅ Approve", `approve_payment_${p.paymentId}`),
+            Markup.button.callback("❌ Reject", `reject_payment_${p.paymentId}`)
+        ]])
+        );
+    }
+});
+
+bot.action("admin_payment_settings", async(ctx)=>{
+    if(!(await isAdmin(ctx.from.id))) return;
+    return ctx.reply(`💳 PAYMENT SETTINGS\n\n🏦 UPI ID: ${paymentSettings.upiId || "Not Set"}\n👤 Merchant: ${paymentSettings.merchantName}\n\n/setupi yourupi@bank\n/setmerchant NexoSMM`);
 });
 
 bot.action("admin_deductcredit", async(ctx)=>{
