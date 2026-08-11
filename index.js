@@ -1172,59 +1172,124 @@ Please complete or cancel it first.`
 
         ctx.answerCbQuery("📡 Searching Number...");
         service = service.toLowerCase();
+      
+      // ================= VAK-SMS BUY NUMBER =================
 
-       // ================= 5SIM BUY NUMBER =================
-
-       const serviceInfo = await Service.findOne({
-
-serviceCode: service.toLowerCase()
-
+const responseData = await callVakApi("getNumber", {
+    service: service,
+    country: country
 });
 
-let operator = "any";
-
-if(serviceInfo){
-
-operator = serviceInfo.operator || "any";
-
-}
-       let responseData = await call5SimApi(
-`/user/buy/activation/${country}/${operator}/${service}`
-);
-
-if (
-    !responseData ||
-    responseData.message ||
-    responseData.status === false
-) {
-
-    responseData = await call5SimApi(
-        `/user/buy/activation/${country}/any/${service}`
-    );
-
-}
-       if (responseData?.message) {
-
-    return ctx.reply(
-`❌ ${responseData.message}
-
-━━━━━━━━━━━━━━
-
-🌍 ${country}
-
-📦 ${service.toUpperCase()}
-
-📡 ${operator}`
-    );
-
-}
-
 console.log(
-    "5SIM BUY RESPONSE:",
+    "VAK-SMS BUY RESPONSE:",
     responseData
 );
 
-        console.log(`API Request -> Country: ${country}, Service: ${service}, Response: ${responseData}`);
+// ================= VAK SUCCESS =================
+
+if (
+    typeof responseData === "string" &&
+    responseData.startsWith("ACCESS_NUMBER:")
+) {
+
+    const parts = responseData.split(":");
+
+    const orderId = parts[1];
+    const phoneNumber = parts[2];
+
+    user.activeOrder = true;
+    user.activeOrderId = String(orderId);
+
+    await user.save();
+
+    return ctx.reply(
+`╔══════════════════════╗
+ 📱 NUMBER ALLOCATED
+╚══════════════════════╝
+
+🌍 Country ID : ${country}
+✅ Service : ${service.toUpperCase()}
+📱 Number : <code>+${phoneNumber}</code>
+🆔 Order ID : <code>${orderId}</code>
+
+━━━━━━━━━━━━━━━━━━
+Copy number and use it.
+Then tap Check OTP.`,
+        {
+            parse_mode: "HTML",
+            ...Markup.inlineKeyboard([
+
+                [
+                    Markup.button.callback(
+                        "❌ Cancel",
+                        `cancel_${orderId}`
+                    )
+                ],
+
+                [
+                    Markup.button.callback(
+                        "🔄 Check OTP",
+                        `api_otp_${orderId}_${service}_${price}`
+                    )
+                ],
+
+                [
+                    Markup.button.callback(
+                        "🏠 Home",
+                        "home"
+                    )
+                ]
+
+            ])
+        }
+    );
+}
+
+// ================= VAK ERROR =================
+
+if (
+    typeof responseData === "string" &&
+    (
+        responseData === "NO_NUMBERS" ||
+        responseData === "NO_BALANCE" ||
+        responseData === "BAD_KEY" ||
+        responseData === "BAD_ACTION"
+    )
+) {
+
+    return ctx.reply(
+`❌ VAK-SMS ERROR
+
+🌍 Country :
+${country}
+
+📦 Service :
+${service.toUpperCase()}
+
+❌ Response :
+${responseData}`
+    );
+
+}
+
+return ctx.reply(
+`❌ No Number Available
+
+━━━━━━━━━━━━━━
+
+🌍 Country :
+${country}
+
+📦 Service :
+${service.toUpperCase()}
+
+📡 Provider :
+VAK-SMS
+
+━━━━━━━━━━━━━━
+
+Please try again later.`
+);
 
         // ================= SUCCESS RESPONSE =================
 
