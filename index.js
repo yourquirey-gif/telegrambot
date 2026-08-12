@@ -1050,159 +1050,126 @@ Markup.inlineKeyboard(buttons)
 
 });
 
-// ================= BUY NUMBER (DYNAMIC FOR ALL COUNTRIES - FIXED) =================
+// ================= BUY NUMBER (VAK-SMS) =================
 
-   bot.action(/select_country_([^_]+)_([^_]+)_([^_]+)_([^_]+)/, async (ctx) => {
+bot.action(/select_country_([^_]+)_([^_]+)_([^_]+)_([^_]+)/, async (ctx) => {
 
-      if(await checkMaintenance(ctx)) return;
-      
-   const userId = String(ctx.from.id);
+    if(await checkMaintenance(ctx)) return;
 
-const now = Date.now();
+    const userId = String(ctx.from.id);
+    const now = Date.now();
 
-if(cooldowns.has(userId)){
+    if(cooldowns.has(userId)){
+        const expiration = cooldowns.get(userId);
 
-const expiration =
-cooldowns.get(userId);
+        if(now < expiration){
+            const left = Math.ceil((expiration - now) / 1000);
 
-if(now < expiration){
+            return ctx.answerCbQuery(
+                `⏳ Please wait ${left}s`,
+                { show_alert:true }
+            );
+        }
+    }
 
-const left =
-Math.ceil(
-(expiration - now) / 1000
-);
+    cooldowns.set(userId, now + 5000);
 
-return ctx.answerCbQuery(
-
-`⏳ Please wait ${left}s`,
-
-{
-show_alert:true
-}
-
-);
-
-}
-
-}
-
-cooldowns.set(
-userId,
-now + 5000
-);
     try {
-        let service = ctx.match[1];
-        let country = ctx.match[2];
-       let countryCode = ctx.match[3];
-       let price = Number(ctx.match[4]);
+
+        let service = String(ctx.match[1]).toLowerCase();
+        const country = ctx.match[2];
+        const countryCode = ctx.match[3];
+        const price = Number(ctx.match[4]);
 
         const user = await User.findOne({
-            userId: String(ctx.from.id)
+            userId
         });
 
-        // ================= USER CHECK =================
-        if (!user) {
-            return ctx.answerCbQuery("❌ User not found", { show_alert: true });
+        if(!user){
+            return ctx.answerCbQuery(
+                "❌ User not found",
+                { show_alert:true }
+            );
         }
 
-        // ================= BANNED CHECK =================
-        if (user.banned) {
-            return ctx.answerCbQuery("❌ You are banned", { show_alert: true });
+        if(user.banned){
+            return ctx.answerCbQuery(
+                "❌ You are banned",
+                { show_alert:true }
+            );
         }
 
-        // ================= CREDIT CHECK =================
+        if(user.activeOrder){
 
-if(user.activeOrder){
+            if(!user.activeOrderId){
 
-if(!user.activeOrderId){
+                user.activeOrder = false;
+                await user.save();
 
-user.activeOrder = false;
+            }else{
 
-await user.save();
+                const checkStatus = await callVakApi("getStatus", {
+                    id: user.activeOrderId
+                });
 
-}else{
+                if(
+                    typeof checkStatus === "string" &&
+                    (
+                        checkStatus === "STATUS_CANCEL" ||
+                        checkStatus === "NO_ACTIVATION"
+                    )
+                ){
+                    user.activeOrder = false;
+                    user.activeOrderId = null;
+                    await user.save();
+                }
+            }
+        }
 
-const checkStatus = await call5SimApi(
-
-    `/user/check/${user.activeOrderId}`
-
-);
-
-if (
-
-    checkStatus &&
-    checkStatus.status !== "PENDING"
-
-) {
-
-user.activeOrder = false;
-user.activeOrderId = null;
-
-await user.save();
-
-}
-
-}
-
-}
-
-if(user.activeOrder){
-
-return ctx.reply(
-
-`⚠️ You already have an active order.
+        if(user.activeOrder){
+            return ctx.reply(
+                `⚠️ You already have an active order.
 
 Please complete or cancel it first.`
+            );
+        }
 
-);
-
-}
-        if (user.credits < price) {
+        if(user.credits < price){
             return ctx.answerCbQuery(
-
-`❌ Not enough credits
+                `❌ Not enough credits
 
 💎 Required: ${price}
 💰 Balance: ${user.credits}`,
-
-{ show_alert: true }
-
-);
+                { show_alert:true }
+            );
         }
 
-        ctx.answerCbQuery("📡 Searching Number...");
-        service = service.toLowerCase();
-      
-      // ================= VAK-SMS BUY NUMBER =================
+        await ctx.answerCbQuery("📡 Searching Number...");
 
-const responseData = await callVakApi("getNumber", {
-    service: service,
-    country: country
-});
+        const responseData = await callVakApi("getNumber", {
+            service,
+            country
+        });
 
-console.log(
-    "VAK-SMS BUY RESPONSE:",
-    responseData
-);
+        console.log(
+            "VAK-SMS BUY RESPONSE:",
+            responseData
+        );
 
-// ================= VAK SUCCESS =================
+        if(
+            typeof responseData === "string" &&
+            responseData.startsWith("ACCESS_NUMBER:")
+        ){
 
-if (
-    typeof responseData === "string" &&
-    responseData.startsWith("ACCESS_NUMBER:")
-) {
+            const parts = responseData.split(":");
+            const orderId = parts[1];
+            const phoneNumber = parts.slice(2).join(":");
 
-    const parts = responseData.split(":");
+            user.activeOrder = true;
+            user.activeOrderId = String(orderId);
+            await user.save();
 
-    const orderId = parts[1];
-    const phoneNumber = parts[2];
-
-    user.activeOrder = true;
-    user.activeOrderId = String(orderId);
-
-    await user.save();
-
-    return ctx.reply(
+            return ctx.reply(
 `╔══════════════════════╗
  📱 NUMBER ALLOCATED
 ╚══════════════════════╝
@@ -1215,49 +1182,19 @@ if (
 ━━━━━━━━━━━━━━━━━━
 Copy number and use it.
 Then tap Check OTP.`,
-        {
-            parse_mode: "HTML",
-            ...Markup.inlineKeyboard([
-
-                [
-                    Markup.button.callback(
-                        "❌ Cancel",
-                        `cancel_${orderId}`
-                    )
-                ],
-
-                [
-                    Markup.button.callback(
-                        "🔄 Check OTP",
-                        `api_otp_${orderId}_${service}_${price}`
-                    )
-                ],
-
-                [
-                    Markup.button.callback(
-                        "🏠 Home",
-                        "home"
-                    )
-                ]
-
-            ])
+                {
+                    parse_mode:"HTML",
+                    ...Markup.inlineKeyboard([
+                        [Markup.button.callback("❌ Cancel", `cancel_${orderId}`)],
+                        [Markup.button.callback("🔄 Check OTP", `api_otp_${orderId}_${service}_${price}`)],
+                        [Markup.button.callback("🏠 Home", "home")]
+                    ])
+                }
+            );
         }
-    );
-}
 
-// ================= VAK ERROR =================
-
-if (
-    typeof responseData === "string" &&
-    (
-        responseData === "NO_NUMBERS" ||
-        responseData === "NO_BALANCE" ||
-        responseData === "BAD_KEY" ||
-        responseData === "BAD_ACTION"
-    )
-) {
-
-    return ctx.reply(
+        if(typeof responseData === "string"){
+            return ctx.reply(
 `❌ VAK-SMS ERROR
 
 🌍 Country :
@@ -1268,11 +1205,10 @@ ${service.toUpperCase()}
 
 ❌ Response :
 ${responseData}`
-    );
+            );
+        }
 
-}
-
-return ctx.reply(
+        return ctx.reply(
 `❌ No Number Available
 
 ━━━━━━━━━━━━━━
@@ -1289,284 +1225,90 @@ VAK-SMS
 ━━━━━━━━━━━━━━
 
 Please try again later.`
-);
+        );
 
-        // ================= SUCCESS RESPONSE =================
-
-       
-           if(responseData && responseData.id){
-
-    const orderId = responseData.id;
-
-    user.activeOrder = true;
-    user.activeOrderId = String(orderId);
-
-    await user.save();
-
-    const phoneNumber = responseData.phone;
-
-    let remaining = "Unknown";
-
-if (responseData.expires) {
-
-    const expire = new Date(responseData.expires);
-
-    const now = new Date();
-
-    const diff = Math.max(
-        0,
-        Math.floor((expire - now) / 1000)
-    );
-
-    const min = Math.floor(diff / 60);
-
-    const sec = diff % 60;
-
-    remaining = `${min}m ${sec}s`;
-
-}
-
-            return ctx.reply(
-`╔══════════════════════╗
- 📱 NUMBER ALLOCATED
-╚══════════════════════╝
-
-🌍 Country ID : ${country}
-✅ Service : ${service.toUpperCase()}
-📱 Number : <code>${phoneNumber}</code>
-🆔 Order ID : <code>${orderId}</code>
-⏳ Remaining : ${remaining}
-
-━━━━━━━━━━━━━━━━━━
-Copy number and use it.
-Then tap refresh to get OTP.`,
-                {
-                    parse_mode: "HTML",
-                    ...Markup.inlineKeyboard([
-
-[
-Markup.button.callback(
-"🚫 Ban Number",
-`ban_${orderId}`
-),
-
-Markup.button.callback(
-"❌ Cancel",
-`cancel_${orderId}`
-)
-
-],
-
-[
-Markup.button.callback(
-"🔄 Check OTP",
-`api_otp_${orderId}_${service}_${price}`
-)
-
-],
-
-[
-Markup.button.callback(
-"🏠 Home",
-"home"
-)
-
-]
-
-])
-                }
-            );
-        }
-        // ================= API ERRORS HANDLING =================
- // ================= 5SIM ERROR HANDLING =================
-
-else if(!responseData){
-
-return ctx.reply(
-
-`❌ No Number Available
-
-━━━━━━━━━━━━━━
-
-🌍 Country :
-${country}
-
-📦 Service :
-${service.toUpperCase()}
-
-📡 Operator :
-${operator}
-
-━━━━━━━━━━━━━━
-
-Please try another country or operator.`
-
-);
-
-}
-
-else {
-
-    return ctx.reply(
-
-`❌ Failed to get number.
-
-Unknown error occurred.`
-
-    );
-
-}
-
-    } catch (err) {
+    } catch(err){
         console.log("BUY NUMBER ERROR:", err);
         return ctx.reply("❌ Server error while buying number.");
     }
 });
 
 
-
-// ================= OTP FETCH SYSTEM (FIXED ACTION) =================
+// ================= OTP FETCH SYSTEM (VAK-SMS) =================
 
 bot.action(/api_otp_(.+)_(.+)_(.+)/, async (ctx) => {
-   if(await checkMaintenance(ctx)) return;
-   
+
+    if(await checkMaintenance(ctx)) return;
+
     const orderId = ctx.match[1];
     const service = ctx.match[2];
-   const price = Number(ctx.match[3]);
-    const userId = ctx.from.id;
+    const price = Number(ctx.match[3]);
+    const userId = String(ctx.from.id);
 
-    const user = await User.findOne({ userId: String(userId) });
+    const user = await User.findOne({ userId });
 
-    if (!user || user.credits <= 0) {
+    if(!user || user.credits <= 0){
         return ctx.reply(
-            `❌ YOU DON'T HAVE ENOUGH CREDITS\n\n💎 Your Balance: 0 credits\n\n📞 Please contact admin to buy credits:\n${creditSettings.contact}`,
-            {
-                reply_markup: {
-                    inline_keyboard: [[{ text: "🛒 Buy Credits", callback_data: "buy" }]]
-                }
-            }
+            `❌ YOU DON'T HAVE ENOUGH CREDITS
+
+💎 Your Balance: ${user?.credits || 0} credits
+
+📞 Please contact admin to buy credits:
+${creditSettings.contact}`,
+            Markup.inlineKeyboard([[Markup.button.callback("🛒 Buy Credits", "buy")]])
         );
     }
 
-   await ctx.answerCbQuery(
-"🔄 Checking OTP..."
-);
-    
-    // Fixed capitalization: getStatus
-    const responseData = await call5SimApi(
-    `/user/check/${orderId}`
+    await ctx.answerCbQuery("🔄 Checking OTP...");
 
-);
-   let remaining = "Unknown";
+    const responseData = await callVakApi("getStatus", {
+        id: orderId
+    });
 
-if (responseData?.expires) {
+    console.log("VAK-SMS OTP RESPONSE:", responseData);
 
-    const expire = new Date(responseData.expires);
+    if(
+        typeof responseData === "string" &&
+        responseData.startsWith("STATUS_OK:")
+    ){
 
-    const now = new Date();
+        const smsCode = responseData.split(":").slice(1).join(":");
+        user.totalOtp += 1;
 
-    const diff = Math.max(
-        0,
-        Math.floor((expire - now) / 1000)
-    );
+        if(
+            user.pendingReferral &&
+            !user.rewardGiven &&
+            user.totalOtp >= 2
+        ){
+            const refUser = await User.findOne({ userId: user.pendingReferral });
 
-    const min = Math.floor(diff / 60);
+            if(refUser){
+                refUser.credits += BONUS_SETTINGS.referralBonus;
+                refUser.referrals += 1;
+                await refUser.save();
 
-    const sec = diff % 60;
+                user.rewardGiven = true;
+                await user.save();
 
-    remaining = `${min}m ${sec}s`;
-
-}
-   if (
-
-    responseData?.status === "TIMEOUT" ||
-
-    responseData?.status === "CANCELED" ||
-
-    responseData?.status === "FINISHED"
-
-){
-
-    user.activeOrder = false;
-    user.activeOrderId = null;
-
-    await user.save();
-
-    return ctx.answerCbQuery(
-
-        "⌛ Order Expired",
-
-        {
-            show_alert: true
-        }
-
-    );
-
-}
-if (
-
-    responseData &&
-    responseData.sms &&
-    responseData.sms.length > 0
-
-) {
-     const smsCode =
-responseData.sms.at(-1).code;
-user.totalOtp += 1;
-
-       // ================= REFERRAL REWARD AFTER 2 OTP =================
-
-if(
-user.pendingReferral &&
-!user.rewardGiven &&
-user.totalOtp >= 2
-){
-
-const refUser =
-await User.findOne({
-userId: user.pendingReferral
-});
-
-if(refUser){
-
-refUser.credits +=
-BONUS_SETTINGS.referralBonus;
-
-refUser.referrals += 1;
-
-await refUser.save();
-
-user.rewardGiven = true;
-
-await user.save();
-
-try{
-
-await bot.telegram.sendMessage(
-
-refUser.userId,
-
+                try{
+                    await bot.telegram.sendMessage(
+                        refUser.userId,
 `🎉 Referral Completed Successfully
 
 👤 Your referred user completed 2 OTPs
 
 💎 +${BONUS_SETTINGS.referralBonus} credits added to your wallet.`
+                    );
+                }catch{}
+            }
+        }
 
-);
-
-}catch{}
-
-}
-
-}
         user.credits = Math.max(0, user.credits - price);
-       user.activeOrder = false;
-       user.activeOrderId = null;
-       
+        user.activeOrder = false;
+        user.activeOrderId = null;
         await user.save();
-       
-ctx.reply(
 
+        return ctx.reply(
 `╔══════════════════════╗
  📩 OTP RECEIVED
 ╚══════════════════════╝
@@ -1580,268 +1322,137 @@ ctx.reply(
 💎 -${price} Credits
 
 💰 Balance :
-${user.credits}
-
-⏳ Remaining :
-${remaining}`,
-
-{
-
-parse_mode:"HTML",
-
-...Markup.inlineKeyboard([
-
-[
-Markup.button.callback(
-
-"🔄 Check Again",
-
-`api_otp_${orderId}_${service}_${price}`
-
-)
-],
-
-[
-Markup.button.callback(
-
-"✅ Complete Order",
-
-`finish_${orderId}`
-
-)
-]
-
-])
-
-}
-
-);
+${user.credits}`,
+            {
+                parse_mode:"HTML",
+                ...Markup.inlineKeyboard([[Markup.button.callback("🏠 Home", "home")]])
+            }
+        );
     }
-else if (
 
-    responseData &&
-    responseData.status === "PENDING"
+    if(responseData === "STATUS_WAIT_CODE"){
+        return ctx.answerCbQuery(
+            "⏳ Waiting For OTP...",
+            { show_alert:true }
+        );
+    }
 
-) {
-     return ctx.answerCbQuery(
+    if(
+        responseData === "STATUS_CANCEL" ||
+        responseData === "NO_ACTIVATION"
+    ){
+        user.activeOrder = false;
+        user.activeOrderId = null;
+        await user.save();
 
-`⏳ Waiting For OTP
+        return ctx.answerCbQuery(
+            "⌛ Order expired or cancelled",
+            { show_alert:true }
+        );
+    }
 
-Remaining Time :
-${remaining}`,
-
-{
-show_alert:true
-}
-
-);
-    } else {
-
-return ctx.answerCbQuery(
-
-`❌ ${responseData?.status || "Order Expired"}`,
-
-{
-show_alert:true
-}
-
-);
-}
-
+    return ctx.answerCbQuery(
+        `❌ ${responseData || "Unable to check OTP"}`,
+        { show_alert:true }
+    );
 });
 
-// ================= BAN ORDER =================
 
-bot.action(/ban_(.+)/, async (ctx) => {
-
-if(await checkMaintenance(ctx)) return;
-
-const orderId = ctx.match[1];
-
-const user = await User.findOne({
-
-userId: String(ctx.from.id)
-
-});
-
-const responseData = await call5SimApi(
-
-`/user/ban/${orderId}`,
-
-"POST"
-
-);
-
-if (
-
-    responseData &&
-    responseData.status === "BANNED"
-
-){
-
-await user.save();
-
-try{
-
-await ctx.editMessageReplyMarkup({
-
-inline_keyboard:[]
-
-});
-
-}catch{}
-
-await ctx.reply(
-
-`🚫 Number Banned Successfully.
-
-This number will not be issued again.`
-
-);
-
-await sendHome(ctx);
-
-return;
-
-}
-
-return ctx.answerCbQuery(
-
-responseData?.message ||
-
-"Unable to ban number.",
-
-{
-
-show_alert:true
-
-}
-
-);
-
-});
-
-// ================= CANCEL ORDER (FIXED ACTION) =================
+// ================= CANCEL ORDER (VAK-SMS) =================
 
 bot.action(/cancel_(.+)/, async (ctx) => {
-   if(await checkMaintenance(ctx)) return;
-   
+
+    if(await checkMaintenance(ctx)) return;
+
     const orderId = ctx.match[1];
-    
-    // Fixed capitalization: setStatus
-    const responseData = await call5SimApi(
+    await ctx.answerCbQuery("Processing...");
 
-    `/user/cancel/${orderId}`
+    const responseData = await callVakApi("setStatus", {
+        id: orderId,
+        status: 8
+    });
 
-);
+    console.log("VAK-SMS CANCEL RESPONSE:", responseData);
 
-    ctx.answerCbQuery("Processing...");
-    
-if (
+    if(
+        responseData === "ACCESS_CANCEL" ||
+        responseData === "STATUS_CANCEL"
+    ){
+        const user = await User.findOne({
+            userId: String(ctx.from.id)
+        });
 
-    responseData &&
-    responseData.status === "CANCELED"
+        if(user){
+            user.activeOrder = false;
+            user.activeOrderId = null;
+            await user.save();
+        }
 
-){
+        await ctx.reply("❌ Order has been cancelled successfully.");
+        return sendHome(ctx);
+    }
 
-const user =
-await User.findOne({
-userId: String(ctx.from.id)
+    return ctx.answerCbQuery(
+        `❌ ${responseData || "Unable to cancel order."}`,
+        { show_alert:true }
+    );
 });
 
-if(user){
 
-user.activeOrder = false;
- user.activeOrderId = null;  
-
-await user.save();
-
-}
-
-ctx.reply(
-"❌ Order has been cancelled successfully."
-);
-
-}else{
-
-ctx.reply(
-
-`❌ ${responseData?.message || "Unable to cancel order."}`
-
-);
-
-}
-    await sendHome(ctx);
-});
-
-// ================= COMPLETE ORDER =================
+// ================= COMPLETE ORDER (VAK-SMS) =================
 
 bot.action(/finish_(.+)/, async (ctx) => {
 
-if(await checkMaintenance(ctx)) return;
+    if(await checkMaintenance(ctx)) return;
 
-const orderId = ctx.match[1];
+    const orderId = ctx.match[1];
+    const user = await User.findOne({
+        userId: String(ctx.from.id)
+    });
 
-const user = await User.findOne({
+    if(!user){
+        return ctx.answerCbQuery(
+            "❌ User not found",
+            { show_alert:true }
+        );
+    }
 
-userId: String(ctx.from.id)
+    const responseData = await callVakApi("setStatus", {
+        id: orderId,
+        status: 6
+    });
 
+    console.log("VAK-SMS COMPLETE RESPONSE:", responseData);
+
+    if(
+        responseData === "ACCESS_READY" ||
+        responseData === "STATUS_OK"
+    ){
+        user.activeOrder = false;
+        user.activeOrderId = null;
+        await user.save();
+
+        try{
+            await ctx.editMessageReplyMarkup({
+                inline_keyboard:[]
+            });
+        }catch{}
+
+        await ctx.reply(
+`✅ Order Completed Successfully
+
+🗑 Number Released Successfully.`
+        );
+
+        return sendHome(ctx);
+    }
+
+    return ctx.answerCbQuery(
+        `❌ ${responseData || "Unable to complete order."}`,
+        { show_alert:true }
+    );
 });
 
-const responseData = await call5SimApi(
-
-`/user/finish/${orderId}`,
-
-"POST"
-
-);
-
-if(
-
-responseData &&
-responseData.status === "FINISHED"
-  
-){
-
-user.activeOrder = false;
-user.activeOrderId = null;
-
-await user.save();
-
-try{
-
-await ctx.editMessageReplyMarkup({
-
-inline_keyboard:[]
-
-});
-
-}catch{}
-
-await ctx.reply(`✅ Order Completed Successfully
-
-🗑 Number Released Successfully.`);
-
-await sendHome(ctx);
-return;
-
-}
-
-return ctx.answerCbQuery(
-
-responseData?.message ||
-
-"Unable to complete order.",
-
-{
-
-show_alert:true
-
-}
-
-);
-
-});
 
 // ================= CREDITS, REFERRAL, TASKS (Rest of your code) =================
 
