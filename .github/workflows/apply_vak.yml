@@ -1,0 +1,31 @@
+name: Apply staged VAK-SMS flow
+on:
+  push:
+    branches:
+      - main
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply staged region
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.js')
+          s = p.read_text()
+          region = Path('vak_region.tmp').read_text()
+          start = s.index('// ================= BUY NUMBER')
+          end = s.index('// ================= CREDITS, REFERRAL, TASKS')
+          p.write_text(s[:start] + region + s[end:])
+          PY
+      - name: Commit VAK-SMS changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f vak_region.tmp .github/workflows/apply_vak.yml
+          git add index.js vak_region.tmp .github/workflows/apply_vak.yml
+          git commit -m "fix: switch all number actions to VAK-SMS"
+          git push
