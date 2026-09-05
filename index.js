@@ -405,7 +405,7 @@ async function expirePayment(paymentId){
         await bot.telegram.sendMessage(
             payment.userId,
             `⌛ PAYMENT EXPIRED\n\n❌ This payment request has expired.\n\nPlease generate a new QR/payment request.`,
-            Markup.inlineKeyboard([[Markup.button.callback("🔄 Generate New QR", "auto_payment")]])
+            Markup.inlineKeyboard([[Markup.button.callback("🔄 Generate New Payment", "manual_payment")]])
         );
     }catch{}
 }
@@ -1543,7 +1543,7 @@ async function askPaymentAmount(ctx){
     paymentInput.set(String(ctx.from.id), "MANUAL");
 
     await ctx.reply(
-`💳 ${method === "AUTO" ? "AUTO APPROVE PAYMENT" : "PAY BY BOT"}
+`💳 PAY BY BOT
 
 Enter the amount you want to pay in INR.
 
@@ -1555,56 +1555,6 @@ Example: 10
 }
 
 
-// ================= AUTO QR PAYMENT =================
-
-async function sendAutoPayment(ctx, amount, credits){
-    if(!paymentSettings.upiId){
-        return ctx.reply(`❌ Auto payment is not configured yet.\n\nPlease contact admin: ${creditSettings.contact}`);
-    }
-
-    const paymentId = makePaymentId();
-    const note = makePaymentNote();
-    const expiresAt = new Date(Date.now() + 3 * 60 * 1000);
-
-    await Payment.create({ paymentId, userId: String(ctx.from.id), amount, credits, method:"AUTO", paymentNote:note, status:"PENDING", expiresAt });
-
-    const qr = await createPaymentQr(amount, note);
-
-    await ctx.replyWithPhoto(
-        { source: qr },
-        {
-            caption:
-`💎 UPI AUTO PAYMENT
-
-💰 Amount To Pay
-₹${amount.toFixed(2)}
-
-🆔 Payment ID
-${paymentId}
-
-📝 Payment Note
-${note}
-
-👤 Merchant
-${paymentSettings.merchantName}
-
-🏦 UPI ID
-${paymentSettings.upiId}
-
-⚠️ IMPORTANT
-
-✅ Pay exactly ₹${amount.toFixed(2)}
-✅ Don't change the payment note
-✅ QR expires in 3 minutes`,
-            ...Markup.inlineKeyboard([
-                [Markup.button.callback("🔄 Check Payment", `payment_paid_${paymentId}`)],
-                [Markup.button.callback("❌ Cancel", `payment_cancel_${paymentId}`)]
-            ])
-        }
-    );
-
-    setTimeout(()=>expirePayment(paymentId), 3 * 60 * 1000 + 2000);
-}
 
 // ================= MANUAL PAYMENT =================
 
@@ -1856,7 +1806,7 @@ bot.command("setmerchant", async(ctx)=>{
 
 bot.command("paymentsettings", async(ctx)=>{
     if(!(await isAdmin(ctx.from.id))) return ctx.reply("❌ Admin only");
-    return ctx.reply(`💳 PAYMENT SETTINGS\n\n🏦 UPI ID: ${paymentSettings.upiId || "Not Set"}\n👤 Merchant: ${paymentSettings.merchantName}\n⏱ Auto QR Expiry: 3 minutes\n⏱ Manual Payment Expiry: 10 minutes`);
+    return ctx.reply(`💳 PAYMENT SETTINGS\n\n🏦 UPI ID: ${paymentSettings.upiId || "Not Set"}\n👤 Merchant: ${paymentSettings.merchantName}\n⏱ Manual Payment Expiry: 10 minutes`);
 });
 
 bot.action("referral", async(ctx)=>{
