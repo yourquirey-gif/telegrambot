@@ -4,7 +4,7 @@
   "description": "Telegram OTP Monitor Bot",
   "main": "index.js",
   "scripts": {
-    "start": "node -r ./strict_force_boot.js -r ./payment_fix_boot.js index.js"
+    "start": "node -r ./telegram_retry_boot.js -r ./strict_force_boot.js -r ./payment_fix_boot.js index.js"
   },
   "keywords": [
     "telegram",
@@ -26,7 +26,7 @@
     "qrcode": "^1.5.4"
   },
   "repository": {
-    "type": "git",
+    "type": "commonjs",
     "url": "git+https://github.com/yourquirey-gif/telegrambot.git"
   },
   "bugs": {
