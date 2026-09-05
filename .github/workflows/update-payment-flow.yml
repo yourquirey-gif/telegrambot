@@ -1,0 +1,243 @@
+name: Update UPI Payment Flow
+
+on:
+  push:
+    paths:
+      - ".payment-flow-trigger"
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update index.js
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const path = 'index.js';
+            const branch = 'main';
+            const file = await github.rest.repos.getContent({owner, repo, path, ref: branch});
+            let s = Buffer.from(file.data.content, 'base64').toString('utf8');
+
+            if (!s.includes('utr: { type: String, default: null }')) {
+              const old = '    paymentNote: String,\n    status: {';
+              const neu = '    paymentNote: String,\n    utr: { type: String, default: null },\n    status: {';
+              if (!s.includes(old)) throw new Error('Payment schema anchor not found');
+              s = s.replace(old, neu);
+            }
+
+            s = s.replace(
+              'Markup.button.callback("🔄 Generate New QR", "auto_payment")',
+              'Markup.button.callback("🔄 Generate New Payment", "manual_payment")'
+            );
+
+            const buyOld = `        [Markup.button.callback("⚡ Auto Approve Payment", "auto_payment")],\n        [Markup.button.callback("📝 Pay by Bot", "manual_payment")],`;
+            if (s.includes(buyOld)) {
+              s = s.replace(buyOld, `        [Markup.button.callback("💳 Pay by UPI", "manual_payment")],`);
+            }
+
+            const manualStart = s.indexOf('// ================= MANUAL PAYMENT =================');
+            const autoCheckStart = s.indexOf('// ================= AUTO PAYMENT CHECK =================');
+            if (manualStart < 0 || autoCheckStart < 0 || autoCheckStart <= manualStart) throw new Error('Payment block anchors not found');
+
+            const manualBlock = String.raw`// ================= MANUAL PAYMENT =================
+
+async function sendManualPayment(ctx, amount, credits){
+    if(!paymentSettings.upiId){
+        return ctx.reply(` + "`❌ Payment UPI is not configured yet.\\n\\nPlease contact admin: ${creditSettings.contact}`" + `);
+    }
+
+    const paymentId = makePaymentId();
+    const note = makePaymentNote();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await Payment.create({
+        paymentId,
+        userId: String(ctx.from.id),
+        amount,
+        credits,
+        method: "MANUAL",
+        paymentNote: note,
+        status: "PENDING",
+        expiresAt
+    });
+
+    const qr = await createPaymentQr(amount, note);
+
+    await ctx.replyWithPhoto(
+        { source: qr },
+        {
+            caption:
+` + "`💳 UPI PAYMENT\\n\\n💰 Amount To Pay\\n₹${amount.toFixed(2)}\\n\\n🆔 Payment ID\\n${paymentId}\\n\\n📝 Payment Note\\n${note}\\n\\n👤 Merchant\\n${paymentSettings.merchantName}\\n\\n🏦 UPI ID\\n${paymentSettings.upiId}\\n\\n⚠️ IMPORTANT\\n\\n✅ Pay exactly ₹${amount.toFixed(2)}\\n✅ Don't change the payment note\\n✅ QR expires in 10 minutes\\n✅ After payment click I Have Paid\\n\\n⏳ Credits will be added only after admin verification.`" + `,
+            ...Markup.inlineKeyboard([
+                [Markup.button.callback("✅ I Have Paid", ` + "`payment_paid_${paymentId}`" + `)],
+                [Markup.button.callback("❌ Cancel", ` + "`payment_cancel_${paymentId}`" + `)]
+            ])
+        }
+    );
+
+    setTimeout(()=>expirePayment(paymentId), 10 * 60 * 1000 + 2000);
+}
+
+bot.action(/payment_paid_(.+)/, async(ctx)=>{
+    const paymentId = ctx.match[1];
+    const payment = await Payment.findOne({ paymentId, userId: String(ctx.from.id) });
+
+    if(!payment || payment.status !== "PENDING")
+        return ctx.answerCbQuery("❌ Payment request expired or already processed", {show_alert:true});
+
+    if(new Date() >= payment.expiresAt){
+        await expirePayment(paymentId);
+        return ctx.answerCbQuery("⌛ Payment expired", {show_alert:true});
+    }
+
+    paymentInput.set(String(ctx.from.id), ` + "`UTR:${paymentId}`" + `);
+    return ctx.reply(
+` + "`🔢 ENTER UTR NUMBER\\n\\n🆔 Payment ID: ${payment.paymentId}\\n\\n💰 Amount: ₹${payment.amount}\\n\\nPlease enter the UTR / Transaction ID of your payment.\\n\\nExample:\\n123456789012\\n\\n⚠️ Enter the UTR exactly as shown in your payment app.`" + `,
+        Markup.inlineKeyboard([[Markup.button.callback("❌ Cancel", ` + "`payment_cancel_${paymentId}`" + `)]])
+    );
+});
+
+`;
+            s = s.slice(0, manualStart) + manualBlock + s.slice(autoCheckStart);
+
+            const checkStart = s.indexOf('// ================= AUTO PAYMENT CHECK =================');
+            const approvalStart = s.indexOf('// ================= PAYMENT ADMIN APPROVAL =================');
+            if (checkStart < 0 || approvalStart < 0 || approvalStart <= checkStart) throw new Error('Message handler anchors not found');
+
+            const handler = String.raw`// ================= PAYMENT MESSAGE HANDLER =================
+
+bot.on("message", async(ctx, next)=>{
+    if(!ctx.from) return;
+    const userId = String(ctx.from.id);
+    const input = paymentInput.get(userId);
+    if(!input) return next();
+    if(ctx.message.text?.startsWith("/")) return next();
+
+    if(String(input).startsWith("REJECT_REASON:")){
+        if(!(await isAdmin(ctx.from.id))){ paymentInput.delete(userId); return next(); }
+        const paymentId = String(input).split(":")[1];
+        const reason = String(ctx.message.text || "").trim();
+        if(!reason) return ctx.reply("❌ Please enter a rejection reason.");
+        const payment = await Payment.findOne({ paymentId });
+        if(!payment){ paymentInput.delete(userId); return ctx.reply("❌ Payment not found."); }
+        if(payment.status !== "SUBMITTED"){
+            paymentInput.delete(userId);
+            return ctx.reply(` + "`❌ Payment is already ${payment.status}.`" + `);
+        }
+        payment.status = "REJECTED";
+        payment.adminId = userId;
+        payment.rejectReason = reason;
+        await payment.save();
+        paymentInput.delete(userId);
+        try{ await bot.telegram.sendMessage(payment.userId,
+` + "`❌ PAYMENT REJECTED\\n\\n🆔 Payment ID: ${payment.paymentId}\\n💰 Amount: ₹${payment.amount}\\n🔢 UTR: ${payment.utr || "Not Provided"}\\n\\n📝 Reason:\\n${reason}\\n\\nIf you believe this is an error, please contact admin.`" + `); }catch{}
+        try{ await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); }catch{}
+        return ctx.reply(` + "`❌ Payment rejected\\n\\n🆔 ${payment.paymentId}\\n📝 Reason: ${reason}`" + `);
+    }
+
+    if(input === "AUTO" || input === "MANUAL"){
+        const amount = Number(String(ctx.message.text || "").trim());
+        if(!Number.isFinite(amount) || amount <= 0) return ctx.reply("❌ Enter a valid amount. Example: 10");
+        const pricePerCredit = Number(creditSettings.pricePerCredit);
+        const credits = amount / pricePerCredit;
+        if(!Number.isInteger(credits)) return ctx.reply(` + "`❌ Invalid amount.\\n\\nAmount must be a multiple of ₹${pricePerCredit}.\\nExample: ${pricePerCredit * 2}`" + `);
+        paymentInput.delete(userId);
+        return sendManualPayment(ctx, amount, credits);
+    }
+
+    if(String(input).startsWith("UTR:")){
+        const paymentId = String(input).split(":")[1];
+        const utr = String(ctx.message.text || "").trim();
+        if(!utr) return ctx.reply("❌ Please enter a valid UTR number.");
+        if(utr.length < 6) return ctx.reply("❌ UTR number looks invalid.\n\nPlease enter the correct UTR.");
+        const payment = await Payment.findOne({ paymentId, userId });
+        if(!payment){ paymentInput.delete(userId); return ctx.reply("❌ Payment request not found."); }
+        if(new Date() >= payment.expiresAt){ paymentInput.delete(userId); await expirePayment(paymentId); return ctx.reply("⌛ Payment expired. Please create a new payment request."); }
+        payment.utr = utr;
+        await payment.save();
+        paymentInput.set(userId, ` + "`SCREENSHOT:${paymentId}`" + `);
+        return ctx.reply(` + "`📸 SEND PAYMENT SCREENSHOT\\n\\n🆔 Payment ID: ${payment.paymentId}\\n\\n💰 Amount: ₹${payment.amount}\\n\\n🔢 UTR:\\n${utr}\\n\\nPlease send the payment screenshot here.\\n\\n⚠️ Screenshot must clearly show the payment details.`" + `,
+            Markup.inlineKeyboard([[Markup.button.callback("❌ Cancel", ` + "`payment_cancel_${paymentId}`" + `)]])
+        );
+    }
+
+    if(String(input).startsWith("SCREENSHOT:")){
+        if(!ctx.message.photo) return ctx.reply("📸 Please send the payment screenshot as an image.");
+        const paymentId = String(input).split(":")[1];
+        const payment = await Payment.findOne({ paymentId, userId });
+        if(!payment || payment.status !== "PENDING"){
+            paymentInput.delete(userId);
+            return ctx.reply("❌ Payment request is no longer active.");
+        }
+        if(new Date() >= payment.expiresAt){
+            paymentInput.delete(userId);
+            await expirePayment(paymentId);
+            return ctx.reply("⌛ Payment expired. Please create a new payment request.");
+        }
+        const photo = ctx.message.photo.at(-1);
+        payment.screenshotFileId = photo.file_id;
+        payment.status = "SUBMITTED";
+        await payment.save();
+        paymentInput.delete(userId);
+        await ctx.reply(` + "`✅ Payment request submitted.\\n\\n🆔 ${payment.paymentId}\\n💰 ₹${payment.amount}\\n🔢 UTR: ${payment.utr || "Not Provided"}\\n\\n⏳ Admin verification pending.`" + `);
+        const adminIds = [String(OWNER_ID)];
+        const admins = await Admin.find();
+        admins.forEach(a=>{ if(!adminIds.includes(String(a.userId))) adminIds.push(String(a.userId)); });
+        const payer = await User.findOne({ userId: payment.userId });
+        const username = payer?.username || "Not Available";
+        for(const adminId of adminIds){
+            try{
+                await bot.telegram.sendPhoto(adminId, photo.file_id, {
+                    caption:
+` + "`💳 NEW PAYMENT REQUEST\\n\\n🆔 Payment ID: ${payment.paymentId}\\n👤 User: ${username}\\n🆔 User ID: ${payment.userId}\\n💰 Amount: ₹${payment.amount}\\n💎 Credits: ${payment.credits}\\n🔢 UTR: ${payment.utr || "Not Provided"}\\n📝 Payment Note: ${payment.paymentNote}\\n\\n⚠️ Verify the screenshot, UTR and payment details before approving.`" + `,
+                    ...Markup.inlineKeyboard([[
+                        Markup.button.callback("✅ Approve", ` + "`approve_payment_${payment.paymentId}`" + `),
+                        Markup.button.callback("❌ Reject", ` + "`reject_payment_${payment.paymentId}`" + `)
+                    ]])
+                });
+            }catch{}
+        }
+    }
+});
+
+`;
+            s = s.slice(0, checkStart) + handler + s.slice(approvalStart);
+
+            const rejectStart = s.indexOf('bot.action(/reject_payment_(.+)/, async(ctx)=>{');
+            const settingsStart = s.indexOf('// ================= PAYMENT SETTINGS =================');
+            if (rejectStart < 0 || settingsStart < 0 || settingsStart <= rejectStart) throw new Error('Reject handler anchors not found');
+            const rejectEnd = s.indexOf('\n// ================= PAYMENT SETTINGS =================', rejectStart);
+            const rejectBlock = String.raw`bot.action(/reject_payment_(.+)/, async(ctx)=>{
+    if(!(await isAdmin(ctx.from.id))) return;
+    const paymentId = ctx.match[1];
+    const payment = await Payment.findOne({ paymentId });
+    if(!payment) return ctx.answerCbQuery("❌ Payment not found", {show_alert:true});
+    if(payment.status !== "SUBMITTED") return ctx.answerCbQuery(` + "`❌ Already ${payment.status}`" + `, {show_alert:true});
+    paymentInput.set(String(ctx.from.id), ` + "`REJECT_REASON:${paymentId}`" + `);
+    await ctx.answerCbQuery("Enter rejection reason");
+    return ctx.reply(` + "`❌ REJECT PAYMENT\\n\\n🆔 Payment ID: ${payment.paymentId}\\n💰 Amount: ₹${payment.amount}\\n🔢 UTR: ${payment.utr || "Not Provided"}\\n\\nPlease enter the reason for rejecting this payment.`" + `);
+});
+`;
+            s = s.slice(0, rejectStart) + rejectBlock + s.slice(rejectEnd);
+
+            const update = await github.rest.repos.createOrUpdateFileContents({
+              owner, repo, path, branch,
+              message: 'Update UPI payment verification flow',
+              content: Buffer.from(s, 'utf8').toString('base64'),
+              sha: file.data.sha
+            });
+            core.setOutput('commit', update.data.commit.sha);
+      - name: Remove trigger
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner, repo = context.repo.repo;
+            const f = await github.rest.repos.getContent({owner, repo, path: '.payment-flow-trigger', ref: 'main'});
+            await github.rest.repos.deleteFile({owner, repo, path: '.payment-flow-trigger', branch: 'main', message: 'Remove payment flow trigger', sha: f.data.sha});
