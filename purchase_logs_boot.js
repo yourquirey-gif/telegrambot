@@ -4,6 +4,7 @@ const { Telegraf, Markup } = require('telegraf');
 const OWNER_ID = 5087094625;
 const settingSchema = new mongoose.Schema({ key: String, value: mongoose.Schema.Types.Mixed });
 const PurchaseLogSetting = mongoose.models.PurchaseLogSetting || mongoose.model('PurchaseLogSetting', settingSchema, 'settings');
+const DepositLog = mongoose.models.PurchaseDepositLog || mongoose.model('PurchaseDepositLog', new mongoose.Schema({ paymentId: {type:String, unique:true}, createdAt:{type:Date,default:Date.now} }, {collection:'purchase_deposit_logs'}));
 const setupState = new Map();
 const purchaseContext = new Map();
 let purchaseLogChannel = '';
@@ -53,6 +54,21 @@ async function sendPurchaseLog(bot, text, userId){
   purchaseContext.delete(String(userId));
 }
 
+async function sendDepositLog(bot, payment){
+  if(!purchaseLogChannel || !payment) return;
+  const paymentId = String(payment.paymentId || '');
+  if(!paymentId) return;
+  try {
+    const already = await DepositLog.findOne({paymentId});
+    if(already) return;
+    const amount = Number(payment.amount || 0);
+    const method = String(payment.method || 'MANUAL');
+    const log = `🚀 New Deposit Success\n\nAmount: ₹${amount.toFixed(2).replace(/\.00$/,'')}\nPayment Method: ${method} (Approved)\n\nThanks For Deposit`;
+    await bot.telegram.sendMessage(purchaseLogChannel, log);
+    await DepositLog.create({paymentId});
+  } catch(e) { console.log('Deposit log send error:', e.message); }
+}
+
 const originalHandleUpdate = Telegraf.prototype.handleUpdate;
 Telegraf.prototype.handleUpdate = async function(update,...args){
   try {
@@ -86,6 +102,19 @@ Telegraf.prototype.handleUpdate = async function(update,...args){
         await setChannel(channel);
         return this.telegram.sendMessage(userId, `✅ Purchase Logs Channel Saved\n\n📋 ${channel}\n\nEvery successful number purchase will now be sent there.`);
       }
+    }
+
+    if(userId && callback.startsWith('approve_payment_')){
+      const result = await originalHandleUpdate.call(this,update,...args);
+      try {
+        const paymentId = callback.slice('approve_payment_'.length);
+        const Payment = mongoose.models.StrictPaymentFix;
+        if(Payment){
+          const payment = await Payment.findOne({paymentId});
+          if(payment?.status === 'APPROVED') setImmediate(() => sendDepositLog(this,payment));
+        }
+      } catch(e) { console.log('Deposit approval hook error:', e.message); }
+      return result;
     }
   } catch(e) { console.log('Purchase log update error:', e.message); }
   return originalHandleUpdate.call(this,update,...args);
