@@ -22,87 +22,31 @@ async function autoRegisterAdminChannel(bot, update) {
   const change = update.my_chat_member;
   if (!change?.chat || !change.new_chat_member) return false;
   if (!['channel', 'supergroup'].includes(change.chat.type)) return false;
-
   const member = change.new_chat_member;
   const isAdmin = member.status === "creator" || member.status === "administrator";
   if (!isAdmin) return false;
-
   const actorId = change.from?.id;
   const chat = change.chat;
 
   if (member.status === "administrator" && member.can_invite_users !== true) {
     if (actorId) {
-      try {
-        await bot.telegram.sendMessage(actorId,
-`❌ BOT PERMISSION MISSING
-
-The bot is ADMIN on:
-📢 ${chat.title || chat.username || chat.id}
-
-But it does NOT have:
-✅ Invite Users via Link
-
-Please enable:
-Channel → Administrators → Bot → Invite Users via Link → ON
-
-⚠️ This channel cannot be used for strict force join until the permission is enabled.`);
-      } catch {}
+      try { await bot.telegram.sendMessage(actorId, `❌ BOT PERMISSION MISSING\n\nThe bot is ADMIN on:\n📢 ${chat.title || chat.username || chat.id}\n\nBut it does NOT have:\n✅ Invite Users via Link\n\nPlease enable:\nChannel → Administrators → Bot → Invite Users via Link → ON\n\n⚠️ This channel cannot be used for strict force join until the permission is enabled.`); } catch {}
     }
     return true;
   }
 
   try {
-    const invite = await bot.telegram.createChatInviteLink(chat.id, {
-      name: `ForceJoin-${Date.now().toString().slice(-8)}`,
-      creates_join_request: false
-    });
-
+    const invite = await bot.telegram.createChatInviteLink(chat.id, { name: `ForceJoin-${Date.now().toString().slice(-8)}`, creates_join_request: false });
     const publicRef = chat.username ? `@${chat.username}` : String(chat.id);
-    await StrictForceChannel.findOneAndUpdate(
-      { chatId: String(chat.id) },
-      {
-        channel: publicRef,
-        chatId: String(chat.id),
-        joinLink: invite.invite_link,
-        title: chat.title || publicRef
-      },
-      { upsert: true, new: true }
-    );
-
+    await StrictForceChannel.findOneAndUpdate({ chatId: String(chat.id) }, { channel: publicRef, chatId: String(chat.id), joinLink: invite.invite_link, title: chat.title || publicRef }, { upsert: true, new: true });
     if (actorId) {
-      try {
-        await bot.telegram.sendMessage(actorId,
-`✅ FORCE JOIN AUTO-ADDED
-
-📢 ${chat.title || chat.username || chat.id}
-🆔 Chat ID: ${chat.id}
-
-🔗 Unique Invite Link:
-${invite.invite_link}
-
-🔒 Strict force join is now ACTIVE for this channel.`);
-      } catch {}
+      try { await bot.telegram.sendMessage(actorId, `✅ FORCE JOIN AUTO-ADDED\n\n📢 ${chat.title || chat.username || chat.id}\n🆔 Chat ID: ${chat.id}\n\n🔗 Unique Invite Link:\n${invite.invite_link}\n\n🔒 Strict force join is now ACTIVE for this channel.`); } catch {}
     }
   } catch (err) {
     if (actorId) {
-      try {
-        await bot.telegram.sendMessage(actorId,
-`❌ INVITE LINK ERROR
-
-Bot is ADMIN on:
-📢 ${chat.title || chat.username || chat.id}
-
-But Telegram did not allow the bot to generate its unique invite link.
-
-Required:
-✅ Bot ADMIN
-✅ Invite Users via Link permission
-
-${err.description || err.message}`);
-      } catch {}
+      try { await bot.telegram.sendMessage(actorId, `❌ INVITE LINK ERROR\n\nBot is ADMIN on:\n📢 ${chat.title || chat.username || chat.id}\n\nTelegram did not allow the bot to generate its unique invite link.\n\nRequired:\n✅ Bot ADMIN\n✅ Invite Users via Link permission\n\n${err.description || err.message}`); } catch {}
     }
   }
-
   return true;
 }
 
@@ -117,107 +61,26 @@ async function resolveChat(update) {
 
 async function addForce(bot, userId, update) {
   const ref = await resolveChat(update);
-  if (!ref) {
-    return bot.telegram.sendMessage(userId,
-`📢 ADD FORCE JOIN
-
-/addforce @channelusername
-
-For a PRIVATE channel:
-1. Add this bot as ADMIN.
-2. Enable "Invite Users via Link" permission.
-3. Forward any message from that channel to this bot.
-4. Reply to that forwarded message with /addforce`);
-  }
+  if (!ref) return bot.telegram.sendMessage(userId, `📢 ADD FORCE JOIN\n\n/addforce @channelusername\n\nFor a PRIVATE channel:\n1. Add this bot as ADMIN.\n2. Enable "Invite Users via Link" permission.\n3. Forward any message from that channel to this bot.\n4. Reply to that forwarded message with /addforce`);
 
   let chat;
-  try {
-    chat = await bot.telegram.getChat(ref);
-  } catch (err) {
-    return bot.telegram.sendMessage(userId, `❌ Channel not found or bot cannot access it.\n\n${err.description || err.message}`);
-  }
-
-  if (!['channel', 'supergroup'].includes(chat.type)) {
-    return bot.telegram.sendMessage(userId, "❌ Only channels/supergroups can be added to force join.");
-  }
+  try { chat = await bot.telegram.getChat(ref); }
+  catch (err) { return bot.telegram.sendMessage(userId, `❌ Channel not found or bot cannot access it.\n\n${err.description || err.message}`); }
+  if (!['channel', 'supergroup'].includes(chat.type)) return bot.telegram.sendMessage(userId, "❌ Only channels/supergroups can be added to force join.");
 
   let me;
-  try {
-    me = await bot.telegram.getChatMember(chat.id, bot.botInfo.id);
-  } catch {
-    return bot.telegram.sendMessage(userId,
-`❌ BOT IS NOT ADMIN
-
-Bot is not an administrator on:
-📢 ${chat.title || chat.username || chat.id}
-
-Please add the bot as ADMIN and enable:
-✅ Invite Users via Link`);
-  }
-
-  if (me.status !== "administrator" && me.status !== "creator") {
-    return bot.telegram.sendMessage(userId,
-`❌ BOT IS NOT ADMIN
-
-Bot is not an administrator on:
-📢 ${chat.title || chat.username || chat.id}
-
-Please add the bot as ADMIN and enable:
-✅ Invite Users via Link`);
-  }
-
-  if (me.status === "administrator" && me.can_invite_users !== true) {
-    return bot.telegram.sendMessage(userId,
-`❌ BOT PERMISSION MISSING
-
-The bot is ADMIN, but it does not have:
-✅ Invite Users via Link
-
-Open:
-Channel → Administrators → Bot → Invite Users via Link → ON`);
-  }
+  try { me = await bot.telegram.getChatMember(chat.id, bot.botInfo.id); }
+  catch { return bot.telegram.sendMessage(userId, `❌ BOT IS NOT ADMIN\n\nBot is not an administrator on:\n📢 ${chat.title || chat.username || chat.id}\n\nPlease add the bot as ADMIN and enable:\n✅ Invite Users via Link`); }
+  if (me.status !== "administrator" && me.status !== "creator") return bot.telegram.sendMessage(userId, `❌ BOT IS NOT ADMIN\n\nBot is not an administrator on:\n📢 ${chat.title || chat.username || chat.id}\n\nPlease add the bot as ADMIN and enable:\n✅ Invite Users via Link`);
+  if (me.status === "administrator" && me.can_invite_users !== true) return bot.telegram.sendMessage(userId, `❌ BOT PERMISSION MISSING\n\nThe bot is ADMIN, but it does not have:\n✅ Invite Users via Link\n\nOpen:\nChannel → Administrators → Bot → Invite Users via Link → ON`);
 
   let invite;
-  try {
-    invite = await bot.telegram.createChatInviteLink(chat.id, {
-      name: `ForceJoin-${Date.now().toString().slice(-8)}`,
-      creates_join_request: false
-    });
-  } catch (err) {
-    return bot.telegram.sendMessage(userId,
-`❌ INVITE LINK ERROR
-
-Bot cannot generate a unique invite link.
-
-Required:
-✅ Bot must be ADMIN
-✅ Invite Users via Link permission
-
-${err.description || err.message}`);
-  }
+  try { invite = await bot.telegram.createChatInviteLink(chat.id, { name: `ForceJoin-${Date.now().toString().slice(-8)}`, creates_join_request: false }); }
+  catch (err) { return bot.telegram.sendMessage(userId, `❌ INVITE LINK ERROR\n\nBot cannot generate a unique invite link.\n\nRequired:\n✅ Bot must be ADMIN\n✅ Invite Users via Link permission\n\n${err.description || err.message}`); }
 
   const publicRef = chat.username ? `@${chat.username}` : String(chat.id);
-  await StrictForceChannel.findOneAndUpdate(
-    { chatId: String(chat.id) },
-    {
-      channel: publicRef,
-      chatId: String(chat.id),
-      joinLink: invite.invite_link,
-      title: chat.title || publicRef
-    },
-    { upsert: true, new: true }
-  );
-
-  return bot.telegram.sendMessage(userId,
-`✅ FORCE JOIN ADDED
-
-📢 ${chat.title || chat.username || chat.id}
-🆔 Chat ID: ${chat.id}
-
-🔗 Unique Invite Link:
-${invite.invite_link}
-
-🔒 Strict force join is now ACTIVE.`);
+  await StrictForceChannel.findOneAndUpdate({ chatId: String(chat.id) }, { channel: publicRef, chatId: String(chat.id), joinLink: invite.invite_link, title: chat.title || publicRef }, { upsert: true, new: true });
+  return bot.telegram.sendMessage(userId, `✅ FORCE JOIN ADDED\n\n📢 ${chat.title || chat.username || chat.id}\n🆔 Chat ID: ${chat.id}\n\n🔗 Unique Invite Link:\n${invite.invite_link}\n\n🔒 Strict force join is now ACTIVE.`);
 }
 
 async function strictStatus(bot, userId) {
@@ -226,10 +89,7 @@ async function strictStatus(bot, userId) {
   let out = "🔒 FORCE JOIN CHANNELS\n\n";
   for (const ch of channels) {
     let ok = false;
-    try {
-      const me = await bot.telegram.getChatMember(ch.chatId || ch.channel, bot.botInfo.id);
-      ok = me.status === "creator" || (me.status === "administrator" && me.can_invite_users === true);
-    } catch {}
+    try { const me = await bot.telegram.getChatMember(ch.chatId || ch.channel, bot.botInfo.id); ok = me.status === "creator" || (me.status === "administrator" && me.can_invite_users === true); } catch {}
     out += `📢 ${ch.title || ch.channel}\n${ok ? "✅ Bot ADMIN + invite permission OK" : "❌ Bot must be ADMIN + Invite Users via Link"}\n🔗 ${ch.joinLink || "No link"}\n\n`;
   }
   return bot.telegram.sendMessage(userId, out);
@@ -239,9 +99,7 @@ async function removeForce(bot, userId, update) {
   const parts = String(update.message?.text || "").trim().split(/\s+/);
   if (!parts[1]) return bot.telegram.sendMessage(userId, "❌ Example: /removeforce -1001234567890");
   const ref = parts[1];
-  const query = ref.startsWith("-100")
-    ? { chatId: ref }
-    : { $or: [{ chatId: ref }, { channel: ref }, { channel: ref.replace(/^@/, "") }] };
+  const query = ref.startsWith("-100") ? { chatId: ref } : { $or: [{ chatId: ref }, { channel: ref }, { channel: ref.replace(/^@/, "") }] };
   const removed = await StrictForceChannel.findOneAndDelete(query);
   if (!removed) return bot.telegram.sendMessage(userId, "❌ Force channel not found.");
   return bot.telegram.sendMessage(userId, `✅ Force channel removed:\n\n${removed.title || removed.channel}`);
@@ -255,16 +113,9 @@ async function strictJoinPrompt(bot, userId, pending) {
     text += "\nRequired permission:\n✅ Invite Users via Link\n\n❌ Bot access is blocked until this is fixed.";
     return bot.telegram.sendMessage(userId, text);
   }
-
-  const buttons = pending.map(x => [
-    Markup.button.url(`📢 Join ${x.title || "Channel"}`, x.joinLink)
-  ]);
+  const buttons = pending.filter(x => x.joinLink).map(x => [Markup.button.url(`📢 Join ${x.title || "Channel"}`, x.joinLink)]);
   buttons.push([Markup.button.callback("✅ Joined", "check_join")]);
-  return bot.telegram.sendMessage(
-    userId,
-    "🔒 JOIN REQUIRED\n\nYou must join ALL required channels before using the bot.\n\nAfter joining every channel, press ✅ Joined.",
-    Markup.inlineKeyboard(buttons)
-  );
+  return bot.telegram.sendMessage(userId, "🔒 JOIN REQUIRED\n\nYou must join ALL required channels before using the bot.\n\nAfter joining every channel, press ✅ Joined.", Markup.inlineKeyboard(buttons));
 }
 
 async function strictCheck(bot, userId) {
@@ -275,10 +126,16 @@ async function strictCheck(bot, userId) {
     try {
       const me = await bot.telegram.getChatMember(chatId, bot.botInfo.id);
       const botOk = me.status === "creator" || (me.status === "administrator" && me.can_invite_users === true);
-      if (!botOk) {
-        pending.push({ ...ch.toObject(), botError: true });
-        continue;
+      if (!botOk) { pending.push({ ...ch.toObject(), botError: true }); continue; }
+
+      if (!ch.joinLink) {
+        try {
+          const invite = await bot.telegram.createChatInviteLink(chatId, { name: `ForceJoin-${Date.now().toString().slice(-8)}`, creates_join_request: false });
+          ch.joinLink = invite.invite_link;
+          await ch.save();
+        } catch {}
       }
+
       const member = await bot.telegram.getChatMember(chatId, userId);
       if (member.status === "left" || member.status === "kicked") pending.push(ch);
     } catch {
@@ -302,13 +159,10 @@ Telegraf.prototype.handleUpdate = async function(update, ...args) {
       const text = update.message?.text || "";
       const callback = update.callback_query?.data || "";
       const isAdmin = await isStrictAdmin(userId);
-
       if (isAdmin && text.startsWith("/addforce")) return addForce(this, userId, update);
       if (isAdmin && text.startsWith("/forcechannels")) return strictStatus(this, userId);
       if (isAdmin && text.startsWith("/removeforce")) return removeForce(this, userId, update);
-
       if (!isAdmin && callback === "check_join") return originalHandleUpdate.call(this, update, ...args);
-
       if (!isAdmin && update.message && update.message.chat?.type === "private") {
         const pending = await strictCheck(this, userId);
         if (pending.length) return strictJoinPrompt(this, userId, pending);
