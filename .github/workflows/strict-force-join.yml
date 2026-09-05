@@ -1,0 +1,295 @@
+name: Strict Force Join Fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  strict-force-join:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply strict force join
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          p = Path('index.js')
+          s = p.read_text(encoding='utf-8')
+
+          old_schema = '''const forceSchema = new mongoose.Schema({\n\n   channel: String,\n\n   joinLink: {\n      type: String,\n      default: null\n   },\n\n   title: {\n      type: String,\n      default: "Join Channel"\n   }\n\n});'''
+          new_schema = '''const forceSchema = new mongoose.Schema({\n\n   channel: String,\n\n   chatId: {\n      type: String,\n      default: null\n   },\n\n   joinLink: {\n      type: String,\n      default: null\n   },\n\n   title: {\n      type: String,\n      default: "Join Channel"\n   }\n\n});'''
+          if old_schema in s:
+              s = s.replace(old_schema, new_schema, 1)
+
+          marker = '// ================= FORCE JOIN CHECK ================='
+          if marker not in s:
+              raise SystemExit('force join marker not found')
+
+          force_helpers = r'''// ================= STRICT FORCE JOIN MANAGEMENT =================
+
+async function getForceChatFromContext(ctx){
+    const msg = ctx.message;
+    const reply = msg && msg.reply_to_message;
+    const forwarded = msg && msg.forward_origin;
+    const replyForwarded = reply && reply.forward_origin;
+
+    const origin = forwarded || replyForwarded;
+    if(origin && origin.type === "channel" && origin.chat){
+        return origin.chat;
+    }
+
+    const raw = String(msg?.text || "").trim();
+    const parts = raw.split(/\s+/);
+    if(parts[1]) return parts[1];
+    return null;
+}
+
+async function validateAndCreateForceChannel(ctx, chatRef){
+    let chat;
+    try{
+        chat = await ctx.telegram.getChat(chatRef);
+    }catch(err){
+        throw new Error(`❌ Channel not found or bot cannot access it.\n\n${err.description || err.message}`);
+    }
+
+    if(!["channel", "supergroup"].includes(chat.type)){
+        throw new Error("❌ Please add a channel or supergroup only.");
+    }
+
+    let botMember;
+    try{
+        botMember = await ctx.telegram.getChatMember(chat.id, ctx.botInfo.id);
+    }catch(err){
+        throw new Error("❌ Bot is not an administrator on this channel.\n\nPlease add the bot as ADMIN first and give it the 'Invite Users via Link' permission.");
+    }
+
+    const isAdmin = botMember.status === "administrator" || botMember.status === "creator";
+    if(!isAdmin){
+        throw new Error("❌ Bot is not an administrator on this channel.\n\nPlease add the bot as ADMIN first and give it the 'Invite Users via Link' permission.");
+    }
+
+    if(botMember.status === "administrator" && botMember.can_invite_users !== true){
+        throw new Error("❌ Bot needs the 'Invite Users via Link' permission.\n\nOpen Channel → Administrators → Bot → enable Invite Users via Link.");
+    }
+
+    let invite;
+    try{
+        invite = await ctx.telegram.createChatInviteLink(chat.id, {
+            name: `ForceJoin-${Date.now().toString().slice(-8)}`,
+            creates_join_request: false
+        });
+    }catch(err){
+        throw new Error(`❌ Bot cannot generate an invite link for this channel.\n\nBot must be ADMIN with 'Invite Users via Link' permission.\n\n${err.description || err.message}`);
+    }
+
+    const title = chat.title || chat.username || "Join Channel";
+    const publicRef = chat.username ? `@${chat.username}` : String(chat.id);
+
+    await ForceChannel.findOneAndUpdate(
+        { chatId: String(chat.id) },
+        {
+            channel: publicRef,
+            chatId: String(chat.id),
+            joinLink: invite.invite_link,
+            title
+        },
+        { upsert: true, new: true }
+    );
+
+    return { chat, invite };
+}
+
+bot.command("addforce", async(ctx)=>{
+    if(!(await isAdmin(ctx.from.id))) return;
+
+    try{
+        const chatRef = await getForceChatFromContext(ctx);
+        if(!chatRef){
+            return ctx.reply(
+`📢 ADD FORCE JOIN CHANNEL
+
+Send:
+/addforce @channelusername
+
+For a PRIVATE channel:
+1. Add this bot as ADMIN.
+2. Give 'Invite Users via Link' permission.
+3. Forward any message from that channel to this bot.
+4. Reply to that forwarded message with /addforce`
+            );
+        }
+
+        const result = await validateAndCreateForceChannel(ctx, chatRef);
+        return ctx.reply(
+`✅ FORCE JOIN ADDED
+
+📢 ${result.chat.title || result.chat.username || result.chat.id}
+🆔 Chat ID: ${result.chat.id}
+
+🔗 Unique Invite Link:
+${result.invite.invite_link}
+
+🔒 Strict force join is now enabled.`
+        );
+    }catch(err){
+        return ctx.reply(err.message || "❌ Could not add force channel.");
+    }
+});
+
+bot.command("forcechannels", async(ctx)=>{
+    if(!(await isAdmin(ctx.from.id))) return;
+
+    const channels = await ForceChannel.find();
+    if(!channels.length) return ctx.reply("❌ No force-join channels configured.");
+
+    let text = "🔒 FORCE JOIN CHANNELS\n\n";
+    for(const ch of channels){
+        let state = "❌ Bot permission problem";
+        try{
+            const member = await ctx.telegram.getChatMember(ch.chatId || ch.channel, ctx.botInfo.id);
+            state = (member.status === "creator" || (member.status === "administrator" && member.can_invite_users === true))
+                ? "✅ Bot admin + invite permission OK"
+                : "❌ Bot must be ADMIN + Invite Users via Link";
+        }catch{}
+        text += `📢 ${ch.title || ch.channel}\n${state}\n🔗 ${ch.joinLink || "No invite link"}\n\n`;
+    }
+    return ctx.reply(text);
+});
+
+bot.command("removeforce", async(ctx)=>{
+    if(!(await isAdmin(ctx.from.id))) return;
+    const raw = String(ctx.message.text || "").trim();
+    const parts = raw.split(/\s+/);
+    if(!parts[1]) return ctx.reply("❌ Example: /removeforce -1001234567890");
+
+    const ref = parts[1];
+    const query = ref.startsWith("-100") ? { chatId: ref } : { $or: [{chatId: ref}, {channel: ref}, {channel: ref.replace(/^@/, "")} ] };
+    const removed = await ForceChannel.findOneAndDelete(query);
+    if(!removed) return ctx.reply("❌ Force channel not found.");
+    return ctx.reply(`✅ Force channel removed:\n\n${removed.title || removed.channel}`);
+});
+
+'''
+          s = s.replace(marker, force_helpers + marker, 1)
+
+          # Replace the old force-join checker with a strict checker that verifies the bot's own admin rights first.
+          pattern = r'async function checkForceJoin\(ctx\)\{.*?\n\}\n// ================= HOME ================='
+          replacement = r'''async function checkForceJoin(ctx){
+    const channels = await ForceChannel.find();
+    const notJoined = [];
+
+    for(const ch of channels){
+        const chatId = ch.chatId || ch.channel;
+
+        try{
+            const botMember = await ctx.telegram.getChatMember(chatId, ctx.botInfo.id);
+            const botIsAdmin = botMember.status === "creator" || botMember.status === "administrator";
+
+            if(!botIsAdmin || (botMember.status === "administrator" && botMember.can_invite_users !== true)){
+                notJoined.push({
+                    channel: ch.channel,
+                    chatId: String(chatId),
+                    title: ch.title || ch.channel,
+                    joinLink: ch.joinLink,
+                    botError: true
+                });
+                continue;
+            }
+
+            const member = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+            if(member.status === "left" || member.status === "kicked"){
+                notJoined.push(ch);
+            }
+        }catch{
+            notJoined.push({
+                channel: ch.channel,
+                chatId: String(chatId),
+                title: ch.title || ch.channel,
+                joinLink: ch.joinLink,
+                botError: true
+            });
+        }
+    }
+
+    return notJoined;
+}
+
+async function sendStrictForceJoinPrompt(ctx, notJoined){
+    const setupErrors = notJoined.filter(c => c.botError);
+    if(setupErrors.length){
+        let text = `🚫 FORCE JOIN CONFIGURATION ERROR\n\n`;
+        text += `The bot must be ADMIN in the following channel(s):\n\n`;
+        setupErrors.forEach(c => {
+            text += `📢 ${c.title || c.channel}\n`;
+        });
+        text += `\n❌ Bot is not allowed to continue until the required admin permission is fixed.\n\n`;
+        text += `Required: ADMIN + Invite Users via Link permission.`;
+        return ctx.reply(text);
+    }
+
+    const buttons = notJoined.map(c => [
+        Markup.button.url(`📢 Join ${c.title || "Channel"}`, c.joinLink)
+    ]);
+    buttons.push([Markup.button.callback("✅ Joined", "check_join")]);
+
+    return ctx.reply(
+        `🔒 JOIN REQUIRED\n\nYou must join ALL required channels before using the bot.\n\nAfter joining every channel, press ✅ Joined.`,
+        Markup.inlineKeyboard(buttons)
+    );
+}
+
+// ================= HOME ================='''
+          s2, n = re.subn(pattern, replacement, s, flags=re.S)
+          if n != 1:
+              raise SystemExit(f'checkForceJoin replacement count={n}')
+          s = s2
+
+          # Replace both old force-join UI blocks with the strict helper.
+          old_ui = r'''if\(notJoined\.length > 0\)\{.*?return ctx\.reply\(\n            `🔒 Please join all channels first\\n\\nThen click ✅ Joined`,\n            Markup\.inlineKeyboard\(buttons\)\n        \);\n\n    \}'''
+          s, n = re.subn(old_ui, 'if(notJoined.length > 0){\n        return sendStrictForceJoinPrompt(ctx, notJoined);\n    }', s, flags=re.S)
+          if n < 1:
+              raise SystemExit(f'force join UI replacement count={n}')
+
+          # Strict middleware: every private-chat interaction is blocked until all required channels are joined.
+          strict_marker = '// ================= HOME ================='
+          strict_mw = r'''// ================= STRICT FORCE JOIN MIDDLEWARE =================
+
+bot.use(async(ctx, next)=>{
+    if(!ctx.from) return next();
+    if(await isAdmin(ctx.from.id)) return next();
+
+    const callbackData = ctx.callbackQuery?.data || "";
+    if(callbackData === "check_join") return next();
+
+    const notJoined = await checkForceJoin(ctx);
+    if(notJoined.length > 0){
+        if(ctx.chat?.type === "private"){
+            return sendStrictForceJoinPrompt(ctx, notJoined);
+        }
+        return next();
+    }
+
+    return next();
+});
+
+'''
+          s = s.replace(strict_marker, strict_mw + strict_marker, 1)
+
+          p.write_text(s, encoding='utf-8')
+
+      - name: Verify and commit
+        run: |
+          node --check index.js
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.js
+          git diff --cached --quiet || git commit -m "feat: strict force join with private channel invites"
+          git push
