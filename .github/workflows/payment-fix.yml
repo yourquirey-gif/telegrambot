@@ -1,0 +1,61 @@
+name: Payment Flow Fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix-payment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply payment changes
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          p = Path('index.js')
+          s = p.read_text(encoding='utf-8')
+
+          # Remove Auto Approve button and keep Pay by Bot only.
+          s = s.replace('        [Markup.button.callback("⚡ Auto Approve Payment", "auto_payment")],\n', '')
+
+          # Remove auto payment action registration.
+          s = re.sub(r'\nbot\.action\("auto_payment", async\(ctx\)=>.*?\n\}\);\n', '\n', s, flags=re.S)
+
+          # Remove the auto payment check action.
+          s = re.sub(r'\n// ================= AUTO PAYMENT CHECK =================.*?\n// ================= PAYMENT MESSAGE HANDLER =================', '\n// ================= PAYMENT MESSAGE HANDLER =================', s, flags=re.S)
+
+          # Remove the auto payment function if present.
+          s = re.sub(r'\nasync function sendAutoPayment\(ctx, amount, credits\)\{.*?\n\}\n\nasync function sendManualPayment', '\nasync function sendManualPayment', s, flags=re.S)
+
+          # Make payment input manual-only.
+          s = s.replace('paymentInput.set(String(ctx.from.id), method);', 'paymentInput.set(String(ctx.from.id), "MANUAL");')
+          s = s.replace('async function askPaymentAmount(ctx, method){', 'async function askPaymentAmount(ctx){')
+          s = s.replace('bot.action("manual_payment", async(ctx)=> askPaymentAmount(ctx, "MANUAL"));', 'bot.action("manual_payment", async(ctx)=> askPaymentAmount(ctx));')
+          s = re.sub(r'\nbot\.action\("auto_payment", async\(ctx\)=> askPaymentAmount\(ctx\)\);\n', '\n', s)
+
+          # Make amount handling manual-only.
+          s = s.replace('if(input === "AUTO" || input === "MANUAL"){', 'if(input === "MANUAL"){')
+          s = re.sub(r'        return input === "AUTO"\n            \? sendAutoPayment\(ctx, amount, credits\)\n            : sendManualPayment\(ctx, amount, credits\);', '        return sendManualPayment(ctx, amount, credits);', s)
+
+          # Remove AUTO from payment method enum.
+          s = s.replace('enum: ["AUTO", "MANUAL"]', 'enum: ["MANUAL"]')
+
+          # Remove any remaining check-payment callback references.
+          s = s.replace('`check_payment_${paymentId}`', '`payment_paid_${paymentId}`')
+          s = s.replace('"check_payment_${paymentId}"', '"payment_paid_${paymentId}"')
+
+          p.write_text(s, encoding='utf-8')
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.js
+          git diff --cached --quiet || git commit -m "fix: remove auto approve payment system"
+          git push
