@@ -346,7 +346,7 @@ const paymentSchema = new mongoose.Schema({
     userId: String,
     amount: Number,
     credits: Number,
-    method: { type: String, enum: ["AUTO", "MANUAL"], default: "MANUAL" },
+    method: { type: String, enum: ["MANUAL"], default: "MANUAL" },
     paymentNote: String,
     status: {
         type: String,
@@ -1527,7 +1527,6 @@ bot.action("buy", async(ctx)=>{
 
 Choose your payment method:`,
     Markup.inlineKeyboard([
-        [Markup.button.callback("⚡ Auto Approve Payment", "auto_payment")],
         [Markup.button.callback("📝 Pay by Bot", "manual_payment")],
         [Markup.button.callback("🏠 Home", "home")]
     ])
@@ -1538,10 +1537,10 @@ Choose your payment method:`,
 
 const paymentInput = new Map();
 
-async function askPaymentAmount(ctx, method){
+async function askPaymentAmount(ctx){
     if(await checkMaintenance(ctx)) return;
 
-    paymentInput.set(String(ctx.from.id), method);
+    paymentInput.set(String(ctx.from.id), "MANUAL");
 
     await ctx.reply(
 `💳 ${method === "AUTO" ? "AUTO APPROVE PAYMENT" : "PAY BY BOT"}
@@ -1555,25 +1554,6 @@ Example: 10
     );
 }
 
-bot.action("auto_payment", async(ctx)=> askPaymentAmount(ctx, "AUTO"));
-bot.action("manual_payment", async(ctx)=> askPaymentAmount(ctx, "MANUAL"));
-
-bot.action(/payment_cancel_(.+)/, async(ctx)=>{
-    const paymentId = ctx.match[1];
-    const payment = await Payment.findOne({ paymentId, userId: String(ctx.from.id) });
-
-    if(payment && ["PENDING","SUBMITTED"].includes(payment.status)){
-        payment.status = "CANCELED";
-        await payment.save();
-    }
-
-    paymentInput.delete(String(ctx.from.id));
-    await ctx.answerCbQuery("Payment canceled");
-    return ctx.reply("❌ Payment canceled.", Markup.inlineKeyboard([
-        [Markup.button.callback("🛒 Add Credits", "buy")],
-        [Markup.button.callback("🏠 Home", "home")]
-    ]));
-});
 
 // ================= AUTO QR PAYMENT =================
 
@@ -1617,7 +1597,7 @@ ${paymentSettings.upiId}
 ✅ Don't change the payment note
 ✅ QR expires in 3 minutes`,
             ...Markup.inlineKeyboard([
-                [Markup.button.callback("🔄 Check Payment", `check_payment_${paymentId}`)],
+                [Markup.button.callback("🔄 Check Payment", `payment_paid_${paymentId}`)],
                 [Markup.button.callback("❌ Cancel", `payment_cancel_${paymentId}`)]
             ])
         }
@@ -1703,19 +1683,6 @@ Send your payment screenshot here.
     );
 });
 
-// ================= AUTO PAYMENT CHECK =================
-
-bot.action(/check_payment_(.+)/, async(ctx)=>{
-    const paymentId = ctx.match[1];
-    const payment = await Payment.findOne({ paymentId, userId: String(ctx.from.id) });
-
-    if(!payment) return ctx.answerCbQuery("❌ Payment not found", {show_alert:true});
-    if(payment.status === "APPROVED") return ctx.answerCbQuery("✅ Payment approved", {show_alert:true});
-    if(payment.status === "EXPIRED") return ctx.answerCbQuery("⌛ QR expired. Generate a new QR.", {show_alert:true});
-
-    return ctx.answerCbQuery("⏳ Payment verification pending.", {show_alert:true});
-});
-
 // ================= PAYMENT MESSAGE HANDLER =================
 
 bot.on("message", async(ctx, next)=>{
@@ -1725,7 +1692,7 @@ bot.on("message", async(ctx, next)=>{
     if(!input) return next();
     if(ctx.message.text?.startsWith("/")) return next();
 
-    if(input === "AUTO" || input === "MANUAL"){
+    if(input === "MANUAL"){
         const amount = Number(String(ctx.message.text || "").trim());
         if(!Number.isFinite(amount) || amount <= 0)
             return ctx.reply("❌ Enter a valid amount. Example: 10");
@@ -1738,9 +1705,7 @@ bot.on("message", async(ctx, next)=>{
         }
 
         paymentInput.delete(userId);
-        return input === "AUTO"
-            ? sendAutoPayment(ctx, amount, credits)
-            : sendManualPayment(ctx, amount, credits);
+        return sendManualPayment(ctx, amount, credits);
     }
 
     if(String(input).startsWith("SCREENSHOT:")){
