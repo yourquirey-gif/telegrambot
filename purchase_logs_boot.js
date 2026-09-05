@@ -5,6 +5,7 @@ const OWNER_ID = 5087094625;
 const settingSchema = new mongoose.Schema({ key: String, value: mongoose.Schema.Types.Mixed });
 const PurchaseLogSetting = mongoose.models.PurchaseLogSetting || mongoose.model('PurchaseLogSetting', settingSchema, 'settings');
 const setupState = new Map();
+const purchaseContext = new Map();
 let purchaseLogChannel = '';
 
 async function loadPurchaseLogChannel(){
@@ -27,14 +28,15 @@ async function setChannel(channel){
 
 function normalizeNumber(v){ return String(v||'').replace(/^\+/, ''); }
 
-async function sendPurchaseLog(bot, text){
+async function sendPurchaseLog(bot, text, userId){
   if(!purchaseLogChannel) return;
-  const service = text.match(/(?:📦|✅)\s*Service\s*:\s*([^\n]+)/i)?.[1]?.trim() || 'Unknown';
-  const countryRaw = text.match(/🌍\s*Country(?: ID)?\s*:\s*([^\n]+)/i)?.[1]?.trim() || 'Unknown';
+  const service = text.match(/(?:📦|✅)\s*Service\s*:\s*([^\n]+)/i)?.[1]?.trim() || purchaseContext.get(String(userId))?.service || 'Unknown';
+  const countryRaw = text.match(/🌍\s*Country(?: ID)?\s*:\s*([^\n]+)/i)?.[1]?.trim() || purchaseContext.get(String(userId))?.country || 'Unknown';
   const phone = text.match(/📱\s*Number\s*:\s*<?(?:<code>)?([^\n>]+)>?/i)?.[1]?.trim() || '';
   const orderId = text.match(/🆔\s*Order ID\s*:\s*<?(?:<code>)?([^\n>]+)>?/i)?.[1]?.trim() || '';
   if(!phone || !orderId) return;
 
+  const context = purchaseContext.get(String(userId)) || {};
   let country = countryRaw;
   try {
     const Country = mongoose.models.Country;
@@ -44,10 +46,11 @@ async function sendPurchaseLog(bot, text){
     }
   } catch {}
 
-  const price = text.match(/(?:price|💎)\s*[:/]?\s*₹?([0-9]+(?:\.[0-9]+)?)/i)?.[1] || '0';
+  const price = context.price || text.match(/(?:price|💎)\s*[:/]?\s*₹?([0-9]+(?:\.[0-9]+)?)/i)?.[1] || '0';
   const log = `📅 New Purchase Success\n\nAmount: 1\nPrice: ₹${price}\nCountry: ${country}\nNumber: +${normalizeNumber(phone)}\nService: ${service}\nOrder ID: ${orderId}\n\nThanks for Purchase @tgfreeotp1bot 🔄`;
   try { await bot.telegram.sendMessage(purchaseLogChannel, log); }
   catch(e) { console.log('Purchase log send error:', e.message); }
+  purchaseContext.delete(String(userId));
 }
 
 const originalHandleUpdate = Telegraf.prototype.handleUpdate;
@@ -55,13 +58,26 @@ Telegraf.prototype.handleUpdate = async function(update,...args){
   try {
     const from = update?.message?.from || update?.callback_query?.from;
     const userId = from?.id;
+    const callback = update?.callback_query?.data || '';
+    const text = update?.message?.text || '';
+
+    if(userId && callback.startsWith('select_country_')){
+      const parts = callback.split('_');
+      if(parts.length >= 6){
+        purchaseContext.set(String(userId), { service: parts[2], country: parts[3], price: Number(parts[5]) || 0 });
+      }
+    }
+
     if(userId && await isAdmin(userId)){
-      const callback = update?.callback_query?.data || '';
-      const text = update?.message?.text || '';
       if(callback === 'admin_purchase_logs'){
         setupState.set(String(userId), true);
         try { await this.telegram.answerCbQuery(update.callback_query.id); } catch {}
-        return this.telegram.sendMessage(userId, `📋 PURCHASE LOGS CHANNEL\n\nCurrent: ${purchaseLogChannel || 'Not Set'}\n\nSend the @username or -100 Chat ID of your new logs channel.\n\nExample: @mylogchannel`, Markup.inlineKeyboard([[Markup.button.callback('❌ Cancel','admin')]]));
+        return this.telegram.sendMessage(userId, `📋 PURCHASE LOGS CHANNEL\n\nCurrent: ${purchaseLogChannel || 'Not Set'}\n\nSend the @username or -100 Chat ID of your new logs channel.\n\nExample: @mylogchannel`, Markup.inlineKeyboard([[Markup.button.callback('❌ Cancel','admin_purchase_logs_cancel')]]));
+      }
+      if(callback === 'admin_purchase_logs_cancel'){
+        setupState.delete(String(userId));
+        try { await this.telegram.answerCbQuery(update.callback_query.id); } catch {}
+        return this.telegram.sendMessage(userId, '❌ Purchase logs channel setup cancelled.');
       }
       if(setupState.get(String(userId)) && update.message?.chat?.type === 'private' && text && !text.startsWith('/')){
         setupState.delete(String(userId));
@@ -97,7 +113,8 @@ try {
             }
           }
           if(text.includes('📱 NUMBER ALLOCATED')){
-            setImmediate(() => sendPurchaseLog(this, text));
+            const chatId = payload.chat_id;
+            setImmediate(() => sendPurchaseLog(this, text, chatId));
           }
         }
       } catch(e) { console.log('Purchase log API hook error:', e.message); }
