@@ -18,6 +18,94 @@ async function isStrictAdmin(userId) {
   return !!(await StrictAdmin.findOne({ userId: String(userId) }));
 }
 
+async function autoRegisterAdminChannel(bot, update) {
+  const change = update.my_chat_member;
+  if (!change?.chat || !change.new_chat_member) return false;
+  if (!['channel', 'supergroup'].includes(change.chat.type)) return false;
+
+  const member = change.new_chat_member;
+  const isAdmin = member.status === "creator" || member.status === "administrator";
+  if (!isAdmin) return false;
+
+  const actorId = change.from?.id;
+  const chat = change.chat;
+
+  if (member.status === "administrator" && member.can_invite_users !== true) {
+    if (actorId) {
+      try {
+        await bot.telegram.sendMessage(actorId,
+`❌ BOT PERMISSION MISSING
+
+The bot is ADMIN on:
+📢 ${chat.title || chat.username || chat.id}
+
+But it does NOT have:
+✅ Invite Users via Link
+
+Please enable:
+Channel → Administrators → Bot → Invite Users via Link → ON
+
+⚠️ This channel cannot be used for strict force join until the permission is enabled.`);
+      } catch {}
+    }
+    return true;
+  }
+
+  try {
+    const invite = await bot.telegram.createChatInviteLink(chat.id, {
+      name: `ForceJoin-${Date.now().toString().slice(-8)}`,
+      creates_join_request: false
+    });
+
+    const publicRef = chat.username ? `@${chat.username}` : String(chat.id);
+    await StrictForceChannel.findOneAndUpdate(
+      { chatId: String(chat.id) },
+      {
+        channel: publicRef,
+        chatId: String(chat.id),
+        joinLink: invite.invite_link,
+        title: chat.title || publicRef
+      },
+      { upsert: true, new: true }
+    );
+
+    if (actorId) {
+      try {
+        await bot.telegram.sendMessage(actorId,
+`✅ FORCE JOIN AUTO-ADDED
+
+📢 ${chat.title || chat.username || chat.id}
+🆔 Chat ID: ${chat.id}
+
+🔗 Unique Invite Link:
+${invite.invite_link}
+
+🔒 Strict force join is now ACTIVE for this channel.`);
+      } catch {}
+    }
+  } catch (err) {
+    if (actorId) {
+      try {
+        await bot.telegram.sendMessage(actorId,
+`❌ INVITE LINK ERROR
+
+Bot is ADMIN on:
+📢 ${chat.title || chat.username || chat.id}
+
+But Telegram did not allow the bot to generate its unique invite link.
+
+Required:
+✅ Bot ADMIN
+✅ Invite Users via Link permission
+
+${err.description || err.message}`);
+      } catch {}
+    }
+  }
+
+  return true;
+}
+
 async function resolveChat(update) {
   const msg = update.message;
   if (!msg) return null;
@@ -203,6 +291,11 @@ async function strictCheck(bot, userId) {
 const originalHandleUpdate = Telegraf.prototype.handleUpdate;
 Telegraf.prototype.handleUpdate = async function(update, ...args) {
   try {
+    if (update?.my_chat_member) {
+      const handled = await autoRegisterAdminChannel(this, update);
+      if (handled) return true;
+    }
+
     const user = update?.message?.from || update?.callback_query?.from;
     const userId = user?.id;
     if (userId) {
@@ -210,25 +303,15 @@ Telegraf.prototype.handleUpdate = async function(update, ...args) {
       const callback = update.callback_query?.data || "";
       const isAdmin = await isStrictAdmin(userId);
 
-      if (isAdmin && text.startsWith("/addforce")) {
-        return addForce(this, userId, update);
-      }
-      if (isAdmin && text.startsWith("/forcechannels")) {
-        return strictStatus(this, userId);
-      }
-      if (isAdmin && text.startsWith("/removeforce")) {
-        return removeForce(this, userId, update);
-      }
+      if (isAdmin && text.startsWith("/addforce")) return addForce(this, userId, update);
+      if (isAdmin && text.startsWith("/forcechannels")) return strictStatus(this, userId);
+      if (isAdmin && text.startsWith("/removeforce")) return removeForce(this, userId, update);
 
-      if (!isAdmin && callback === "check_join") {
-        return originalHandleUpdate.call(this, update, ...args);
-      }
+      if (!isAdmin && callback === "check_join") return originalHandleUpdate.call(this, update, ...args);
 
       if (!isAdmin && update.message && update.message.chat?.type === "private") {
         const pending = await strictCheck(this, userId);
-        if (pending.length) {
-          return strictJoinPrompt(this, userId, pending);
-        }
+        if (pending.length) return strictJoinPrompt(this, userId, pending);
       }
     }
   } catch (err) {
