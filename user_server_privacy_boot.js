@@ -1,10 +1,10 @@
 const { Telegram } = require('telegraf');
 
-// User-facing messages must expose only generic Server 1 / Server 2 labels.
+// User-facing order messages expose only generic Server 1 / Server 2 labels.
 // Admin configuration messages are intentionally left unchanged.
 function cleanUserText(text) {
   let t = String(text || '');
-  const userFlow = /NUMBER ALLOCATED|Searching (?:5SIM|VAK-SMS) number|Provider\s*:\s*VAK-SMS|5SIM ERROR|VAK-SMS ERROR|5SIM did not return|VAK-SMS ERROR/i.test(t);
+  const userFlow = /NUMBER ALLOCATED|Searching (?:5SIM|VAK-SMS) number|Provider\s*:\s*(?:5SIM|VAK-SMS)|(?:5SIM|VAK-SMS)\s+(?:ERROR|order cancelled|did not return)|(?:5SIM|VAK-SMS)\s+(?:OTP|order)/i.test(t);
   const purchaseLog = t.includes('📅 New Purchase Success');
 
   if (userFlow) {
@@ -18,6 +18,10 @@ function cleanUserText(text) {
     t = t.replace(/❌\s*VAK-SMS\s+ERROR/gi, '❌ Server 2 ERROR');
     t = t.replace(/❌\s*5SIM did not return a number/gi, '❌ Server 1 did not return a number');
     t = t.replace(/❌\s*VAK-SMS did not return a number/gi, '❌ Server 2 did not return a number');
+    t = t.replace(/❌\s*5SIM order cancelled/gi, '❌ Server 1 order cancelled');
+    t = t.replace(/❌\s*VAK-SMS order cancelled/gi, '❌ Server 2 order cancelled');
+    t = t.replace(/\b5SIM\b/gi, 'Server 1');
+    t = t.replace(/\bVAK-SMS\b/gi, 'Server 2');
   }
 
   if (purchaseLog) {
