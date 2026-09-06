@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const axios = require('axios');
 const { Telegraf, Markup } = require('telegraf');
+const { Telegram } = require('telegraf');
 
 const FIVE_BASE='https://5sim.net/v1';
 const FIVE_TOKEN=process.env.FIVESIM_API_KEY||process.env.FIVE_SIM_API_KEY||process.env['5SIM_API_KEY']||'';
@@ -177,21 +178,19 @@ async function directBuy(bot,q,server,country,service){
 }
 
 try{
-  const originalCallApi=Telegraf.prototype.telegram?.constructor?.prototype?.callApi;
-  if(originalCallApi){
-    Telegraf.prototype.telegram.constructor.prototype.callApi=async function(method,payload,...args){
-      try{
-        if(method==='sendMessage'&&payload&&String(payload.text||'').includes('⚙️ ADMIN PANEL')&&payload.reply_markup){
-          const kb=payload.reply_markup.inline_keyboard||[];
-          if(!kb.some(r=>r.some(b=>b.callback_data==='admin_usdt_rate'))){
-            kb.push([{text:'💱 Set USDT Rate',callback_data:'admin_usdt_rate'}]);
-            payload.reply_markup.inline_keyboard=kb;
-          }
+  const originalCallApi=Telegram.prototype.callApi;
+  Telegram.prototype.callApi=async function(method,payload,...args){
+    try{
+      if(method==='sendMessage'&&payload&&String(payload.text||'').includes('⚙️ ADMIN PANEL')&&payload.reply_markup){
+        const kb=payload.reply_markup.inline_keyboard||[];
+        if(!kb.some(r=>r.some(b=>b.callback_data==='admin_usdt_rate'))){
+          kb.push([{text:'💱 Set USDT Rate',callback_data:'admin_usdt_rate'}]);
+          payload.reply_markup.inline_keyboard=kb;
         }
-      }catch{}
-      return originalCallApi.call(this,method,payload,...args);
-    };
-  }
+      }
+    }catch{}
+    return originalCallApi.call(this,method,payload,...args);
+  };
 }catch(e){console.log('USDT rate admin UI hook:',e.message)}
 
 const previous=Telegraf.prototype.handleUpdate;
@@ -206,7 +205,6 @@ Telegraf.prototype.handleUpdate=async function(update,...args){
           const rate=await setUsdtInr(text);
           return this.telegram.sendMessage(uid,`✅ USDT rate saved.\n\n💱 1 USDT = ₹${rate}`);
         }catch(e){
-          usdtRateState.delete(String(uid));
           return this.telegram.sendMessage(uid,`❌ ${e.message}`);
         }
       }
