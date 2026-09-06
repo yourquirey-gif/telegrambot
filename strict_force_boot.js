@@ -5,6 +5,8 @@ const OWNER_ID = 5087094625;
 const strictForceSchema = new mongoose.Schema({ channel: String, chatId: String, joinLink: String, title: String }, { collection: "forcechannels" });
 const StrictForceChannel = mongoose.models.StrictForceChannel || mongoose.model("StrictForceChannel", strictForceSchema);
 const StrictAdmin = mongoose.models.StrictAdmin || mongoose.model("StrictAdmin", new mongoose.Schema({ userId: String }, { collection: "admins" }));
+const checkCache = new Map();
+const CACHE_MS = 8000;
 
 async function isStrictAdmin(userId) {
   if (Number(userId) === OWNER_ID) return true;
@@ -64,13 +66,12 @@ async function addForce(bot, userId, update) {
 async function strictStatus(bot, userId) {
   const channels = await StrictForceChannel.find();
   if (!channels.length) return bot.telegram.sendMessage(userId, "❌ No force-join channels configured.");
-  let out = "🔒 FORCE JOIN CHANNELS\n\n";
-  for (const ch of channels) {
+  const results = await Promise.all(channels.map(async ch => {
     let ok = false;
     try { const me = await bot.telegram.getChatMember(ch.chatId || ch.channel, bot.botInfo.id); ok = me.status === "creator" || (me.status === "administrator" && me.can_invite_users === true); } catch {}
-    out += `📢 ${ch.title || ch.channel}\n${ok ? "✅ Bot ADMIN + invite permission OK" : "❌ Bot must be ADMIN + Invite Users via Link"}\n🔗 ${ch.joinLink || "No link"}\n\n`;
-  }
-  return bot.telegram.sendMessage(userId, out);
+    return `📢 ${ch.title || ch.channel}\n${ok ? "✅ Bot ADMIN + invite permission OK" : "❌ Bot must be ADMIN + Invite Users via Link"}\n🔗 ${ch.joinLink || "No link"}\n\n`;
+  }));
+  return bot.telegram.sendMessage(userId, "🔒 FORCE JOIN CHANNELS\n\n" + results.join(""));
 }
 
 async function sendRemoveForceMenu(bot, userId) {
@@ -84,7 +85,6 @@ async function sendRemoveForceMenu(bot, userId) {
 async function removeForceById(bot, userId, id) {
   const removed = await StrictForceChannel.findByIdAndDelete(id);
   if (!removed) return bot.telegram.sendMessage(userId, "❌ Force channel not found or already removed.");
-  try { await bot.telegram.answerCbQuery(arguments[3]?.id || undefined, "✅ Removed"); } catch {}
   await bot.telegram.sendMessage(userId, `✅ Force channel removed:\n\n📢 ${removed.title || removed.channel || removed.chatId}`);
   return sendRemoveForceMenu(bot, userId);
 }
@@ -113,27 +113,41 @@ async function strictJoinPrompt(bot, userId, pending) {
 }
 
 async function strictCheck(bot, userId) {
-  const channels = await StrictForceChannel.find();
-  const pending = [];
-  for (const ch of channels) {
+  const key = String(userId);
+  const cached = checkCache.get(key);
+  if (cached && Date.now() - cached.time < CACHE_MS) return cached.pending;
+
+  const channels = await StrictForceChannel.find().lean();
+  if (!channels.length) {
+    checkCache.set(key, { time: Date.now(), pending: [] });
+    return [];
+  }
+
+  const pending = (await Promise.all(channels.map(async ch => {
     const chatId = ch.chatId || ch.channel;
     try {
       const me = await bot.telegram.getChatMember(chatId, bot.botInfo.id);
       const botOk = me.status === "creator" || (me.status === "administrator" && me.can_invite_users === true);
-      if (!botOk) { pending.push({ ...ch.toObject(), botError: true }); continue; }
-      if (!ch.joinLink) {
+      if (!botOk) return { ...ch, botError: true };
+
+      let joinLink = ch.joinLink;
+      if (!joinLink) {
         try {
           const invite = await bot.telegram.createChatInviteLink(chatId, { name: `ForceJoin-${Date.now().toString().slice(-8)}`, creates_join_request: false });
-          ch.joinLink = invite.invite_link;
-          await ch.save();
+          joinLink = invite.invite_link;
+          await StrictForceChannel.updateOne({ _id: ch._id }, { $set: { joinLink } });
         } catch {}
       }
+
       const member = await bot.telegram.getChatMember(chatId, userId);
-      if (member.status === "left" || member.status === "kicked") pending.push(ch);
+      if (member.status === "left" || member.status === "kicked") return { ...ch, joinLink };
+      return null;
     } catch {
-      pending.push({ ...ch.toObject(), botError: true });
+      return { ...ch, botError: true };
     }
-  }
+  }))).filter(Boolean);
+
+  checkCache.set(key, { time: Date.now(), pending });
   return pending;
 }
 
