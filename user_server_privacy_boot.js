@@ -1,9 +1,10 @@
 const { Telegram } = require('telegraf');
 
 // User-facing order messages expose only generic Server 1 / Server 2 labels.
-// Admin configuration messages are intentionally left unchanged.
+// Currency is displayed only as INR (₹); the legacy DB field can remain internally.
 function cleanUserText(text) {
   let t = String(text || '');
+
   const userFlow = /NUMBER ALLOCATED|Searching (?:5SIM|VAK-SMS) number|Provider\s*:\s*(?:5SIM|VAK-SMS)|(?:5SIM|VAK-SMS)\s+(?:ERROR|order cancelled|did not return)|(?:5SIM|VAK-SMS)\s+(?:OTP|order)/i.test(t);
   const purchaseLog = t.includes('📅 New Purchase Success');
 
@@ -33,6 +34,21 @@ function cleanUserText(text) {
     }
     t = t.replace(/\b5SIM\b/gi, 'Server 1').replace(/\bVAK-SMS\b/gi, 'Server 2');
   }
+
+  // Legacy credit wording -> direct rupee wording.
+  t = t.replace(/(\d+(?:\.\d+)?)\s*credits\b/gi, '₹$1');
+  t = t.replace(/(\d+(?:\.\d+)?)\s*credit\b/gi, '₹$1');
+  t = t.replace(/(Required\s*:\s*)₹?([0-9]+(?:\.[0-9]+)?)/gi, '$1₹$2');
+  t = t.replace(/(Balance\s*:\s*)₹?([0-9]+(?:\.[0-9]+)?)/gi, '$1₹$2');
+  t = t.replace(/(Price\s*:\s*)₹?([0-9]+(?:\.[0-9]+)?)/gi, '$1₹$2');
+  t = t.replace(/(Cost\s*\/\s*OTP\s*:\s*)₹?([0-9]+(?:\.[0-9]+)?)/gi, '$1₹$2');
+  t = t.replace(/Credits\s+deducted/gi, 'Balance deducted');
+  t = t.replace(/My Credits/gi, 'My Balance');
+  t = t.replace(/Buy Credits/gi, 'Add Balance');
+  t = t.replace(/\bcredits\b/gi, 'balance');
+  t = t.replace(/\bcredit\b/gi, 'balance');
+
+  if (/💎\s*BALANCE\s*:/i.test(t)) t = t.replace(/💎\s*BALANCE\s*:/gi, '💰 BALANCE :');
   return t;
 }
 
@@ -40,16 +56,22 @@ try {
   const originalCallApi = Telegram.prototype.callApi;
   Telegram.prototype.callApi = async function(method, payload, ...args) {
     try {
-      if (method === 'sendMessage' && payload) {
-        const original = String(payload.text || '');
-        const cleaned = cleanUserText(original);
-        if (cleaned !== original) payload.text = cleaned;
+      if (payload) {
+        if (typeof payload.text === 'string') payload.text = cleanUserText(payload.text);
+        if (typeof payload.caption === 'string') payload.caption = cleanUserText(payload.caption);
+        if (payload.reply_markup?.inline_keyboard) {
+          for (const row of payload.reply_markup.inline_keyboard) {
+            for (const button of row) {
+              if (typeof button.text === 'string') button.text = cleanUserText(button.text);
+            }
+          }
+        }
       }
     } catch (e) {
-      console.log('Server privacy hook error:', e.message);
+      console.log('UI currency hook error:', e.message);
     }
     return originalCallApi.call(this, method, payload, ...args);
   };
 } catch (e) {
-  console.log('Server privacy boot error:', e.message);
+  console.log('UI currency boot error:', e.message);
 }
