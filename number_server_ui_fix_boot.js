@@ -6,9 +6,10 @@ const FIVE_BASE='https://5sim.net/v1';
 const FIVE_TOKEN=process.env.FIVESIM_API_KEY||process.env.FIVE_SIM_API_KEY||process.env['5SIM_API_KEY']||'';
 const VAK_KEY=process.env.VAKSMS_API_KEY||'';
 const VAK_BASE='https://vak-sms.com/stubs/handler_api.php';
-const FX_URL='https://api.2328.io/api/v1/exchange-rates';
-let usdtInrCache=0;
+const DEFAULT_USDT_INR=100;
+let usdtInrCache=DEFAULT_USDT_INR;
 let usdtInrAt=0;
+const usdtRateState=new Map();
 
 const cfgSchema=new mongoose.Schema({server:{type:String,unique:true},countries:{type:Array,default:[]},services:{type:Array,default:[]},operators:{type:Array,default:[]},markup:{type:Number,default:0}},{collection:'number_server_configs'});
 const Config=mongoose.models.NumberServerUiFixConfig||mongoose.model('NumberServerUiFixConfig',cfgSchema);
@@ -20,14 +21,32 @@ function page(a,p=1,n=5){return a.slice((p-1)*n,p*n)}
 async function fiveGuest(path){try{return (await axios.get(FIVE_BASE+path,{timeout:12000,headers:{Accept:'application/json'}})).data}catch{return null}}
 async function vak(action,params={}){try{return (await axios.get(VAK_BASE,{params:{action,api_key:VAK_KEY,...params},timeout:12000})).data}catch{return null}}
 
+async function isAdmin(id){
+  if(Number(id)===5087094625)return true;
+  try{return !!(await mongoose.models.Admin?.findOne({userId:String(id)}));}catch{return false;}
+}
+
 async function getUsdtInr(){
-  if(usdtInrCache>0 && Date.now()-usdtInrAt<10*60*1000)return usdtInrCache;
+  if(usdtInrCache>0 && Date.now()-usdtInrAt<30*1000)return usdtInrCache;
   try{
-    const r=await axios.get(FX_URL,{timeout:10000});
-    const rate=Number(r.data?.result?.USDT?.INR||r.data?.result?.USD?.INR);
-    if(Number.isFinite(rate)&&rate>0){usdtInrCache=rate;usdtInrAt=Date.now();return rate;}
+    const db=mongoose.connection?.db;
+    if(db){
+      const doc=await db.collection('settings').findOne({key:'usdtInrRate'});
+      const rate=Number(doc?.value);
+      if(Number.isFinite(rate)&&rate>0){usdtInrCache=rate;usdtInrAt=Date.now();return rate;}
+    }
   }catch{}
-  return usdtInrCache||null;
+  usdtInrCache=DEFAULT_USDT_INR;usdtInrAt=Date.now();return DEFAULT_USDT_INR;
+}
+
+async function setUsdtInr(rate){
+  const n=Number(rate);
+  if(!Number.isFinite(n)||n<=0)throw new Error('Enter a valid USDT rate, e.g. 100');
+  const db=mongoose.connection?.db;
+  if(!db)throw new Error('Database is not connected');
+  await db.collection('settings').updateOne({key:'usdtInrRate'},{$set:{key:'usdtInrRate',value:n,updatedAt:new Date()}},{upsert:true});
+  usdtInrCache=n;usdtInrAt=Date.now();
+  return n;
 }
 
 function findPriceInBlock(block){
@@ -117,11 +136,11 @@ async function renderServices(bot,q,server,countryId,p=1){
       stock=await fiveStock(country.id,s.id,op?.operator||'any');
       if(price<=0){
         const base=await fivePrice(country.id,s.id,op?.operator||'any');
-        if(base!=null){const rate=await getUsdtInr();if(rate)price=Math.ceil(base*rate*(1+Number(c.markup||0)/100));}
+        if(base!=null){const rate=await getUsdtInr();price=Math.ceil(base*rate*(1+Number(c.markup||0)/100));}
       }else price=Math.ceil(price);
     }else{
       stock=await vakStock(country.id,s.id);
-      if(price<=0){const pUsd=await vakPrice(country.id,s.id);const rate=await getUsdtInr();if(pUsd!=null&&rate)price=Math.ceil(pUsd*rate);}else price=Math.ceil(price);
+      if(price<=0){const pUsd=await vakPrice(country.id,s.id);const rate=await getUsdtInr();if(pUsd!=null)price=Math.ceil(pUsd*rate);}else price=Math.ceil(price);
     }
     rows.push([Markup.button.callback(`📦 ${s.name} • ₹${price} • Stock: ${stock}`,`ns_buy_${server}_${enc(country.id)}_${enc(s.id)}`)]);
   }
@@ -157,10 +176,47 @@ async function directBuy(bot,q,server,country,service){
   return bot.telegram.sendMessage(q.from.id,`❌ Server 2 ERROR\n\n${String(response||'No number available')}`);
 }
 
+try{
+  const originalCallApi=Telegraf.prototype.telegram?.constructor?.prototype?.callApi;
+  if(originalCallApi){
+    Telegraf.prototype.telegram.constructor.prototype.callApi=async function(method,payload,...args){
+      try{
+        if(method==='sendMessage'&&payload&&String(payload.text||'').includes('⚙️ ADMIN PANEL')&&payload.reply_markup){
+          const kb=payload.reply_markup.inline_keyboard||[];
+          if(!kb.some(r=>r.some(b=>b.callback_data==='admin_usdt_rate'))){
+            kb.push([{text:'💱 Set USDT Rate',callback_data:'admin_usdt_rate'}]);
+            payload.reply_markup.inline_keyboard=kb;
+          }
+        }
+      }catch{}
+      return originalCallApi.call(this,method,payload,...args);
+    };
+  }
+}catch(e){console.log('USDT rate admin UI hook:',e.message)}
+
 const previous=Telegraf.prototype.handleUpdate;
 Telegraf.prototype.handleUpdate=async function(update,...args){
   try{
     const q=update?.callback_query, cb=q?.data||'', uid=q?.from?.id;
+    if(uid && update.message?.chat?.type==='private' && update.message?.text && usdtRateState.has(String(uid)) && await isAdmin(uid)){
+      const text=String(update.message.text).trim();
+      if(!text.startsWith('/')){
+        usdtRateState.delete(String(uid));
+        try{
+          const rate=await setUsdtInr(text);
+          return this.telegram.sendMessage(uid,`✅ USDT rate saved.\n\n💱 1 USDT = ₹${rate}`);
+        }catch(e){
+          usdtRateState.delete(String(uid));
+          return this.telegram.sendMessage(uid,`❌ ${e.message}`);
+        }
+      }
+    }
+    if(q&&uid&&await isAdmin(uid)&&cb==='admin_usdt_rate'){
+      try{await this.telegram.answerCbQuery(q.id)}catch{}
+      const rate=await getUsdtInr();
+      usdtRateState.set(String(uid),true);
+      return this.telegram.sendMessage(uid,`💱 USDT → INR RATE\n\nCurrent: ₹${rate} per USDT\n\nSend the new rate.\nExample: 100`);
+    }
     if(q&&uid){
       if(cb==='ns_user_5sim'||cb==='ns_user_vak'){
         try{await this.telegram.answerCbQuery(q.id)}catch{}
