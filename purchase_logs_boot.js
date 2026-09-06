@@ -37,12 +37,30 @@ async function setDepositChannel(channel){
 
 function normalizeNumber(v){ return String(v||'').replace(/^\+/, ''); }
 
+function serverName(v){
+  const s=String(v||'').toLowerCase();
+  if(s.includes('tempo')) return 'Server 1';
+  if(s.includes('vak')) return 'Server 2';
+  if(s.includes('5sim') || s.includes('5 sim')) return 'Server 3';
+  if(/^server\s*[123]$/i.test(String(v||''))) return String(v);
+  return 'Server 1';
+}
+
+function cleanProviderNames(v){
+  return String(v||'')
+    .replace(/TempoSMS/gi,'Server 1')
+    .replace(/VAK[- ]?SMS/gi,'Server 2')
+    .replace(/5SIM/gi,'Server 3')
+    .replace(/5 Sim/gi,'Server 3');
+}
+
 async function sendPurchaseLog(bot, text, userId){
   if(!purchaseLogChannel) return;
   const service = text.match(/(?:📦|✅)\s*Service\s*:\s*([^\n]+)/i)?.[1]?.trim() || purchaseContext.get(String(userId))?.service || 'Unknown';
   const countryRaw = text.match(/🌍\s*Country(?: ID)?\s*:\s*([^\n]+)/i)?.[1]?.trim() || purchaseContext.get(String(userId))?.country || 'Unknown';
   const phone = text.match(/📱\s*Number\s*:\s*<?(?:<code>)?([^\n>]+)>?/i)?.[1]?.trim() || '';
   const orderId = text.match(/🆔\s*Order ID\s*:\s*<?(?:<code>)?([^\n>]+)>?/i)?.[1]?.trim() || '';
+  const rawServer = text.match(/🖥\s*Server\s*:\s*([^\n]+)/i)?.[1]?.trim() || purchaseContext.get(String(userId))?.server || '';
   if(!phone || !orderId) return;
 
   const context = purchaseContext.get(String(userId)) || {};
@@ -56,7 +74,7 @@ async function sendPurchaseLog(bot, text, userId){
   } catch {}
 
   const price = context.price || text.match(/(?:price|💎)\s*[:/]?\s*₹?([0-9]+(?:\.[0-9]+)?)/i)?.[1] || '0';
-  const log = `📅 New Purchase Success\n\nAmount: 1\nPrice: ₹${price}\nCountry: ${country}\nNumber: +${normalizeNumber(phone)}\nService: ${service}\nOrder ID: ${orderId}\n\nThanks for Purchase @tgfreeotp1bot 🔄`;
+  const log = `📅 New Purchase Success\n\n🖥 Server: ${serverName(rawServer)}\nAmount: 1\nPrice: ₹${price}\nCountry: ${country}\nNumber: +${normalizeNumber(phone)}\nService: ${cleanProviderNames(service)}\nOrder ID: ${orderId}\n\nThanks for Purchase @tgfreeotp1bot 🔄`;
   try { await bot.telegram.sendMessage(purchaseLogChannel, log); }
   catch(e) { console.log('Purchase log send error:', e.message); }
   purchaseContext.delete(String(userId));
