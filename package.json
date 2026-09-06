@@ -4,7 +4,7 @@
   "description": "Telegram OTP Monitor Bot",
   "main": "index.js",
   "scripts": {
-    "start": "node -r ./telegram_retry_boot.js -r ./strict_force_boot.js -r ./payment_fix_boot.js -r ./purchase_logs_boot.js -r ./number_server_boot.js -r ./vak_settings_fix_boot.js -r ./number_server_lists_boot.js -r ./number_server_ui_fix_boot.js -r ./number_stock_fix_boot.js -r ./user_server_privacy_boot.js -r ./number_server_import_pricing_boot.js -r ./number_server_import_ui_boot.js -r ./vak_catalog_ui_boot.js -r ./vak_user_catalog_final_boot.js -r ./user_catalog_search_fix_boot.js -r ./vak_service_country_search_boot.js -r ./tempo_server_boot.js -r ./hide_provider_names_boot.js -r ./tempo_admin_final_fix_boot.js -r ./server_service_first_boot.js -r ./service_country_final_boot.js -r ./provider_live_fix_boot.js -r ./5sim_confirmation_boot.js index.js"
+    "start": "node -r ./render_port_boot.js -r ./telegram_retry_boot.js -r ./strict_force_boot.js -r ./payment_fix_boot.js -r ./purchase_logs_boot.js -r ./number_server_boot.js -r ./vak_settings_fix_boot.js -r ./number_server_lists_boot.js -r ./number_server_ui_fix_boot.js -r ./number_stock_fix_boot.js -r ./user_server_privacy_boot.js -r ./number_server_import_pricing_boot.js -r ./number_server_import_ui_boot.js -r ./vak_catalog_ui_boot.js -r ./vak_user_catalog_final_boot.js -r ./user_catalog_search_fix_boot.js -r ./vak_service_country_search_boot.js -r ./tempo_server_boot.js -r ./hide_provider_names_boot.js -r ./tempo_admin_final_fix_boot.js -r ./server_service_first_boot.js -r ./service_country_final_boot.js -r ./provider_live_fix_boot.js -r ./5sim_confirmation_boot.js index.js"
   },
   "keywords": ["telegram", "otp"],
   "author": "",
