@@ -44,10 +44,24 @@ async function vak(action,params={}){
   return r.data;
 }
 
+// Telegram callback_query is a raw update object, not a Telegraf Context.
+// Wrap it so existing reply/answerCbQuery based handlers work correctly.
+function makeCallbackContext(bot,update){
+  const q=update?.callback_query;
+  const uid=q?.from?.id;
+  return {
+    from:q?.from,
+    chat:q?.message?.chat,
+    callbackQuery:q,
+    reply:(...args)=>bot.telegram.sendMessage(uid,...args),
+    answerCbQuery:(...args)=>bot.telegram.answerCbQuery(q.id,...args)
+  };
+}
+
 async function sendServerMenu(bot,userId){
-  return bot.telegram.sendMessage(userId,'🖥 NUMBER SERVERS\n\nServer 1 = 5SIM\nServer 2 = VAK-SMS',Markup.inlineKeyboard([
-    [Markup.button.callback('🟢 Server 1 • 5SIM','ns_user_5sim')],
-    [Markup.button.callback('🔵 Server 2 • VAK-SMS','ns_user_vak')],
+  return bot.telegram.sendMessage(userId,'🖥 NUMBER SERVERS\n\nChoose a number server:',Markup.inlineKeyboard([
+    [Markup.button.callback('🟢 Server 1','ns_user_5sim')],
+    [Markup.button.callback('🔵 Server 2','ns_user_vak')],
     [Markup.button.callback('🏠 Home','home')]
   ]));
 }
@@ -90,7 +104,7 @@ async function showCountries(ctx,server,p=1){
   const rows=arr.map(x=>[Markup.button.callback(`🌍 ${x.name}`,`ns_country_${server}_${safe(x.id)}`)]);
   const nav=[]; if(p>1) nav.push(Markup.button.callback('⬅',`ns_countries_${server}_${p-1}`)); if(p<total) nav.push(Markup.button.callback('➡',`ns_countries_${server}_${p+1}`)); if(nav.length) rows.push(nav);
   rows.push([Markup.button.callback('⬅ Servers','ns_user_menu')]);
-  return ctx.reply(`🌍 ${server==='5sim'?'5SIM':'VAK-SMS'} • Select Country\n\nPage ${p}/${total}`,Markup.inlineKeyboard(rows));
+  return ctx.reply(`🌍 ${server==='5sim'?'Select Country':'Select Country'}\n\nPage ${p}/${total}`,Markup.inlineKeyboard(rows));
 }
 async function showServices(ctx,server,country,p=1){
   const c=await getCfg(server); const arr=page(c.services,p); const total=Math.max(1,Math.ceil(c.services.length/5));
@@ -150,28 +164,29 @@ Telegraf.prototype.handleUpdate=async function(update,...args){
       if(m){setupState.set(String(uid),{server:m[1],action:m[2]});try{await this.telegram.answerCbQuery(update.callback_query.id)}catch{};const prompts={add_country:m[1]==='5sim'?'Send: country-api-name | Display Name':'Send: countryId | Display Name | Country Code',del_country:'Send country ID to remove',add_service:m[1]==='5sim'?'Send: service-api-code | Display Name':'Send: service-api-code | Display Name | Price',del_service:'Send service ID to remove',add_operator:'Send: country | service | operator',del_operator:'Send: country | service | operator',markup:'Send markup percentage, e.g. 20'};return this.telegram.sendMessage(uid,`✍️ ${prompts[m[2]]}`);}
       const vm=cb.match(/^nsc_(5sim|vak)_view$/);if(vm){const c=await getCfg(vm[1]);return this.telegram.sendMessage(uid,`📋 ${vm[1].toUpperCase()} CONFIG\n\nCountries:\n${c.countries.map(x=>`${x.id} = ${x.name}`).join('\n')||'None'}\n\nServices:\n${c.services.map(x=>`${x.id} = ${x.name}${vm[1]==='vak'&&x.price?' • '+x.price+' credits':''}`).join('\n')||'None'}\n\nOperators:\n${c.operators.map(x=>`${x.country} | ${x.service} | ${x.operator}`).join('\n')||'None'}\n\nMarkup: ${c.markup}%`);}
     }
+    const cbctx=update?.callback_query?makeCallbackContext(this,update):null;
     if(uid && cb==='devices_1'){try{await this.telegram.answerCbQuery(update.callback_query.id)}catch{};return sendServerMenu(this,uid);}
-    if(uid && cb==='ns_user_5sim') return showCountries(update.callback_query,'5sim',1);
-    if(uid && cb==='ns_user_vak') return showCountries(update.callback_query,'vak',1);
-    if(uid && cb==='ns_user_menu') return sendServerMenu(this,uid);
-    if(uid && cb.startsWith('ns_countries_')){const p=cb.split('_');return showCountries(update.callback_query,p[2],Number(p[3])||1);}
-    if(uid && cb.startsWith('ns_country_')){const p=cb.split('_');const server=p[2],cid=dec(p[3]);const c=await getCfg(server);const country=c.countries.find(x=>String(x.id)===cid);if(!country)return this.telegram.sendMessage(uid,'❌ Country not found');return showServices(update.callback_query,server,country,1);}
-    if(uid && cb.startsWith('ns_services_')){const p=cb.split('_');const server=p[2],cid=dec(p[3]),pg=Number(p[4])||1;const c=await getCfg(server);const country=c.countries.find(x=>String(x.id)===cid);if(!country)return this.telegram.sendMessage(uid,'❌ Country not found');return showServices(update.callback_query,server,country,pg);}
+    if(uid && cb==='ns_user_5sim'){try{await cbctx.answerCbQuery()}catch{};return showCountries(cbctx,'5sim',1);}
+    if(uid && cb==='ns_user_vak'){try{await cbctx.answerCbQuery()}catch{};return showCountries(cbctx,'vak',1);}
+    if(uid && cb==='ns_user_menu'){try{await cbctx.answerCbQuery()}catch{};return sendServerMenu(this,uid);}
+    if(uid && cb.startsWith('ns_countries_')){const p=cb.split('_');try{await cbctx.answerCbQuery()}catch{};return showCountries(cbctx,p[2],Number(p[3])||1);}
+    if(uid && cb.startsWith('ns_country_')){const p=cb.split('_');const server=p[2],cid=dec(p[3]);const c=await getCfg(server);const country=c.countries.find(x=>String(x.id)===cid);if(!country)return this.telegram.sendMessage(uid,'❌ Country not found');try{await cbctx.answerCbQuery()}catch{};return showServices(cbctx,server,country,1);}
+    if(uid && cb.startsWith('ns_services_')){const p=cb.split('_');const server=p[2],cid=dec(p[3]),pg=Number(p[4])||1;const c=await getCfg(server);const country=c.countries.find(x=>String(x.id)===cid);if(!country)return this.telegram.sendMessage(uid,'❌ Country not found');try{await cbctx.answerCbQuery()}catch{};return showServices(cbctx,server,country,pg);}
     if(uid && cb.startsWith('ns_buy_')){
       const p=cb.split('_');const server=p[2],country=dec(p[3]),service=dec(p[4]);const c=await getCfg(server);const co=c.countries.find(x=>String(x.id)===country);const se=c.services.find(x=>String(x.id)===service);if(!co||!se)return this.telegram.sendMessage(uid,'❌ Configuration missing');
       if(server==='5sim'){
         const configured=c.operators.find(o=>o.country===country&&o.service===service);const operator=configured?.operator||'any';const base=await fivePrice(country,service,operator);if(base==null)return this.telegram.sendMessage(uid,'❌ No 5SIM price/stock found.');const price=Math.ceil(base*(1+Number(c.markup||0)/100));
-        if(!configured){pendingFive.set(String(uid),{country,service,price,base});return this.telegram.sendMessage(uid,`🟡 Confirm 5SIM Purchase\n\n🌍 Country: ${co.name}\n📦 Service: ${se.name}\n💎 Price: ${price} credits\n\nOperator is not set. Continue with any operator?`,Markup.inlineKeyboard([[Markup.button.callback('✅ Yes',`ns_confirm5_${safe(country)}_${safe(service)}_${price}`),Markup.button.callback('❌ No','ns_confirm5_no')]]));}
-        return fiveBuy(update.callback_query,country,service,operator,price);
+        if(!configured){pendingFive.set(String(uid),{country,service,price,base});try{await cbctx.answerCbQuery()}catch{};return this.telegram.sendMessage(uid,`🟡 Confirm 5SIM Purchase\n\n🌍 Country: ${co.name}\n📦 Service: ${se.name}\n💎 Price: ${price} credits\n\nOperator is not set. Continue with any operator?`,Markup.inlineKeyboard([[Markup.button.callback('✅ Yes',`ns_confirm5_${safe(country)}_${safe(service)}_${price}`),Markup.button.callback('❌ No','ns_confirm5_no')]]));}
+        return fiveBuy(cbctx,country,service,operator,price);
       }
-      const price=Number(se.price||0);if(price<=0)return this.telegram.sendMessage(uid,'❌ VAK-SMS price is not set for this service.');return vakBuy(update.callback_query,country,service,price);
+      const price=Number(se.price||0);if(price<=0)return this.telegram.sendMessage(uid,'❌ VAK-SMS price is not set for this service.');return vakBuy(cbctx,country,service,price);
     }
-    if(uid && cb==='ns_confirm5_no'){pendingFive.delete(String(uid));return this.telegram.editMessageText(uid,update.callback_query.message.message_id,undefined,'❌ Purchase cancelled.');}
-    if(uid && cb.startsWith('ns_confirm5_')){const p=cb.split('_');const country=dec(p[2]),service=dec(p[3]),price=Number(p[4]);pendingFive.delete(String(uid));return fiveBuy(update.callback_query,country,service,'any',price);}
+    if(uid && cb==='ns_confirm5_no'){pendingFive.delete(String(uid));try{await cbctx.answerCbQuery()}catch{};return this.telegram.editMessageText(uid,update.callback_query.message.message_id,undefined,'❌ Purchase cancelled.');}
+    if(uid && cb.startsWith('ns_confirm5_')){const p=cb.split('_');const country=dec(p[2]),service=dec(p[3]),price=Number(p[4]);pendingFive.delete(String(uid));return fiveBuy(cbctx,country,service,'any',price);}
     if(uid && cb.startsWith('ns_otp_5s_')){const p=cb.split('_');const id=p[3],service=dec(p[4]),price=Number(p[5]);const User=mongoose.models.User;const user=await User.findOne({userId:String(uid)});if(!user)return;try{await this.telegram.answerCbQuery(update.callback_query.id,'🔄 Checking OTP...')}catch{};try{const o=await five('GET',`/user/check/${id}`);if(o?.sms?.length){const sms=o.sms[o.sms.length-1];user.credits=Math.max(0,user.credits-price);user.totalOtp=(user.totalOtp||0)+1;user.activeOrder=false;user.activeOrderId=null;await user.save();try{await five('GET',`/user/finish/${id}`)}catch{};return this.telegram.sendMessage(uid,`╔══════════════════════╗\n 📩 OTP RECEIVED\n╚══════════════════════╝\n\n🔐 OTP\n\n<code>${sms.code||sms.text}</code>\n\n💎 Charged: ${price} credits`,{parse_mode:'HTML',...Markup.inlineKeyboard([[Markup.button.callback('🏠 Home','home')]])});}return this.telegram.sendMessage(uid,`⏳ OTP not received yet.\n\nStatus: ${o?.status||'PENDING'}\n\nTap Check OTP again.`);}catch(e){return this.telegram.sendMessage(uid,'❌ 5SIM OTP error.');}}
     if(uid && cb.startsWith('ns_otp_vk_')){const p=cb.split('_');const id=p[3],service=dec(p[4]),price=Number(p[5]);const User=mongoose.models.User;const user=await User.findOne({userId:String(uid)});if(!user)return;try{await this.telegram.answerCbQuery(update.callback_query.id,'🔄 Checking OTP...')}catch{};try{const o=await vak('getStatus',{id});if(typeof o==='string'&&o.startsWith('STATUS_OK:')){const code=o.split(':').slice(1).join(':');user.credits=Math.max(0,user.credits-price);user.totalOtp=(user.totalOtp||0)+1;user.activeOrder=false;user.activeOrderId=null;await user.save();return this.telegram.sendMessage(uid,`╔══════════════════════╗\n 📩 OTP RECEIVED\n╚══════════════════════╝\n\n🔐 OTP\n\n<code>${code}</code>\n\n💎 Charged: ${price} credits`,{parse_mode:'HTML',...Markup.inlineKeyboard([[Markup.button.callback('🏠 Home','home')]])});}return this.telegram.sendMessage(uid,`⏳ OTP not received yet.\n\nStatus: ${o||'PENDING'}\n\nTap Check OTP again.`);}catch(e){return this.telegram.sendMessage(uid,'❌ VAK-SMS OTP error.');}}
-    if(uid && cb.startsWith('ns_cancel_vk_')){const p=cb.split('_');const id=p[3];const User=mongoose.models.User;const user=await User.findOne({userId:String(uid)});try{await vak('setStatus',{id,status:'8'})}catch{};if(user){user.activeOrder=false;user.activeOrderId=null;await user.save();}return this.telegram.sendMessage(uid,'❌ VAK-SMS order cancelled.');}
-    if(uid && cb.startsWith('ns_cancel_5s_')){const p=cb.split('_');const id=p[3];const User=mongoose.models.User;const user=await User.findOne({userId:String(uid)});try{await five('GET',`/user/cancel/${id}`)}catch{};if(user){user.activeOrder=false;user.activeOrderId=null;await user.save();}return this.telegram.sendMessage(uid,'❌ 5SIM order cancelled.');}
+    if(uid && cb.startsWith('ns_cancel_vk_')){const p=cb.split('_');const id=p[3];const User=mongoose.models.User;const user=await User.findOne({userId:String(uid)});try{await vak('setStatus',{id,status:'8'})}catch{};if(user){user.activeOrder=false;user.activeOrderId=null;await user.save();}try{await cbctx.answerCbQuery()}catch{};return this.telegram.sendMessage(uid,'❌ VAK-SMS order cancelled.');}
+    if(uid && cb.startsWith('ns_cancel_5s_')){const p=cb.split('_');const id=p[3];const User=mongoose.models.User;const user=await User.findOne({userId:String(uid)});try{await five('GET',`/user/cancel/${id}`)}catch{};if(user){user.activeOrder=false;user.activeOrderId=null;await user.save();}try{await cbctx.answerCbQuery()}catch{};return this.telegram.sendMessage(uid,'❌ 5SIM order cancelled.');}
   }catch(e){console.log('Number server boot error:',e.message);}
   return originalHandle.call(this,update,...args);
 };
