@@ -2,7 +2,7 @@ const { Telegraf } = require('telegraf');
 
 // Keep provider/site names completely hidden from Telegram UI.
 function cleanString(s){
-  return String(s)
+  let out=String(s)
     .replace(/🟣\s*Server\s*1\s*[•·-]\s*TempoSMS/gi,'🟣 Server 1')
     .replace(/🟣\s*Server\s*1\s*[•·-]\s*TEMPOSMS/gi,'🟣 Server 1')
     .replace(/Server\s*1\s*[•·-]\s*TempoSMS/gi,'Server 1')
@@ -11,6 +11,15 @@ function cleanString(s){
     .replace(/VAK-SMS/gi,'Server 2')
     .replace(/5SIM/gi,'Server 3')
     .replace(/TEMPO\s*SMS/gi,'Server 1');
+
+  // Never allow the provider-name scrubber to create duplicated server labels.
+  out=out
+    .replace(/Server\s*1\s*[•·-]\s*Server\s*1/gi,'Server 1')
+    .replace(/Server\s*2\s*[•·-]\s*Server\s*2/gi,'Server 2')
+    .replace(/Server\s*3\s*[•·-]\s*Server\s*3/gi,'Server 3')
+    .replace(/Server\s*([123])\s+Server\s*\1/gi,'Server $1');
+
+  return out;
 }
 function clean(v,key){
   if(typeof v==='string') return key==='callback_data'||key==='url' ? v : cleanString(v);
