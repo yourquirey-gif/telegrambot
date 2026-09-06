@@ -73,6 +73,22 @@ async function strictStatus(bot, userId) {
   return bot.telegram.sendMessage(userId, out);
 }
 
+async function sendRemoveForceMenu(bot, userId) {
+  const channels = await StrictForceChannel.find().sort({ _id: 1 });
+  if (!channels.length) return bot.telegram.sendMessage(userId, "🗑 REMOVE FORCE JOIN\n\n❌ No force-join channels configured.");
+  const rows = channels.map(ch => [Markup.button.callback(`🗑 ${ch.title || ch.channel || ch.chatId}`, `force_rm_${ch._id}`)]);
+  rows.push([Markup.button.callback("⬅ Admin Panel", "admin_panel")]);
+  return bot.telegram.sendMessage(userId, "🗑 REMOVE FORCE JOIN\n\nSelect the force-join channel you want to remove:", Markup.inlineKeyboard(rows));
+}
+
+async function removeForceById(bot, userId, id) {
+  const removed = await StrictForceChannel.findByIdAndDelete(id);
+  if (!removed) return bot.telegram.sendMessage(userId, "❌ Force channel not found or already removed.");
+  try { await bot.telegram.answerCbQuery(arguments[3]?.id || undefined, "✅ Removed"); } catch {}
+  await bot.telegram.sendMessage(userId, `✅ Force channel removed:\n\n📢 ${removed.title || removed.channel || removed.chatId}`);
+  return sendRemoveForceMenu(bot, userId);
+}
+
 async function removeForce(bot, userId, update) {
   const parts = String(update.message?.text || "").trim().split(/\s+/);
   if (!parts[1]) return bot.telegram.sendMessage(userId, "❌ Example: /removeforce -1001234567890");
@@ -121,6 +137,24 @@ async function strictCheck(bot, userId) {
   return pending;
 }
 
+// Inject a dedicated remove button into the existing admin panel.
+try {
+  const Telegram = require("telegraf").Telegram;
+  const originalCallApi = Telegram.prototype.callApi;
+  Telegram.prototype.callApi = async function(method, payload, ...args) {
+    try {
+      if (method === "sendMessage" && payload && String(payload.text || "").includes("⚙️ ADMIN PANEL") && payload.reply_markup) {
+        const kb = payload.reply_markup.inline_keyboard || [];
+        if (!kb.some(row => row.some(btn => btn.callback_data === "force_remove_menu"))) {
+          kb.push([{ text: "🗑 Remove Force Join", callback_data: "force_remove_menu" }]);
+          payload.reply_markup.inline_keyboard = kb;
+        }
+      }
+    } catch {}
+    return originalCallApi.call(this, method, payload, ...args);
+  };
+} catch {}
+
 const originalHandleUpdate = Telegraf.prototype.handleUpdate;
 Telegraf.prototype.handleUpdate = async function(update, ...args) {
   try {
@@ -138,6 +172,17 @@ Telegraf.prototype.handleUpdate = async function(update, ...args) {
       if (isAdmin && text.startsWith("/addforce")) return addForce(this, userId, update);
       if (isAdmin && text.startsWith("/forcechannels")) return strictStatus(this, userId);
       if (isAdmin && text.startsWith("/removeforce")) return removeForce(this, userId, update);
+
+      if (isAdmin && callback === "force_remove_menu") {
+        try { await this.telegram.answerCbQuery(update.callback_query.id); } catch {}
+        return sendRemoveForceMenu(this, userId);
+      }
+
+      if (isAdmin && callback.startsWith("force_rm_")) {
+        const id = callback.slice("force_rm_".length);
+        try { await this.telegram.answerCbQuery(update.callback_query.id, "Removing..."); } catch {}
+        return removeForceById(this, userId, id);
+      }
 
       if (!isAdmin && callback === "check_join") {
         const pending = await strictCheck(this, userId);
