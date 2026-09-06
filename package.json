@@ -4,7 +4,7 @@
   "description": "Telegram OTP Monitor Bot",
   "main": "index.js",
   "scripts": {
-    "start": "node -r ./telegram_retry_boot.js -r ./strict_force_boot.js -r ./payment_fix_boot.js -r ./purchase_logs_boot.js -r ./number_server_boot.js -r ./vak_settings_fix_boot.js -r ./number_server_lists_boot.js -r ./number_server_ui_fix_boot.js index.js"
+    "start": "node -r ./telegram_retry_boot.js -r ./strict_force_boot.js -r ./payment_fix_boot.js -r ./purchase_logs_boot.js -r ./number_server_boot.js -r ./vak_settings_fix_boot.js -r ./number_server_lists_boot.js -r ./number_server_ui_fix_boot.js -r ./user_server_privacy_boot.js index.js"
   },
   "keywords": ["telegram", "otp"],
   "author": "",
