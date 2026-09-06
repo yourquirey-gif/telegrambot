@@ -1,7 +1,7 @@
 const { Telegram } = require('telegraf');
 
 // User-facing order messages expose only generic Server 1 / Server 2 labels.
-// Currency is displayed only as INR (₹); the legacy DB field can remain internally.
+// Currency is displayed only as INR (₹); the legacy DB field remains internal for compatibility.
 function cleanUserText(text) {
   let t = String(text || '');
 
@@ -47,8 +47,7 @@ function cleanUserText(text) {
   t = t.replace(/Buy Credits/gi, 'Add Balance');
   t = t.replace(/\bcredits\b/gi, 'balance');
   t = t.replace(/\bcredit\b/gi, 'balance');
-
-  if (/💎\s*BALANCE\s*:/i.test(t)) t = t.replace(/💎\s*BALANCE\s*:/gi, '💰 BALANCE :');
+  t = t.replace(/💎\s*BALANCE\s*:/gi, '💰 BALANCE :');
   return t;
 }
 
