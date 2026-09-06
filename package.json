@@ -4,11 +4,10 @@
   "description": "Telegram OTP Monitor Bot",
   "main": "index.js",
   "scripts": {
-    "start": "node -r ./telegram_retry_boot.js -r ./strict_force_boot.js -r ./payment_fix_boot.js -r ./purchase_logs_boot.js index.js"
+    "start": "node -r ./telegram_retry_boot.js -r ./strict_force_boot.js -r ./payment_fix_boot.js -r ./purchase_logs_boot.js -r ./number_server_boot.js index.js"
   },
   "keywords": [
     "telegram",
-    "telegraf",
     "otp"
   ],
   "author": "",
@@ -21,11 +20,11 @@
     "mongoose": "^8.15.1",
     "telegraf": "^4.16.3",
     "express": "^4.19.2",
-    "cors": "^2.8.5",
+    "cors": "^2.0.0",
     "qrcode": "^1.5.4"
   },
   "repository": {
-    "type": "commonjs",
+    "type": "git",
     "url": "git+https://github.com/yourquirey-gif/telegrambot.git"
   },
   "bugs": {
