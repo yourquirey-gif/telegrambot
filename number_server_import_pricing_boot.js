@@ -27,5 +27,42 @@ async function importFive(){if(!FIVE_TOKEN)throw Error('FIVESIM_API_KEY is not c
 async function importVak(){if(!VAK_KEY)throw Error('VAKSMS_API_KEY is not configured');const c=await cfg('vak');const oldPrice=new Map(c.services.map(s=>[String(s.id),Number(s.price||0)]));let co=await vak('getCountries');if(typeof co==='string')co=null;let countries=[];if(Array.isArray(co))countries=co;else if(co&&typeof co==='object')countries=Object.entries(co).map(([id,v])=>({id,name:v?.name||v?.title||id,code:v?.code||v?.iso||''}));if(!countries.length){const d=await vak('getPrices');if(d&&typeof d==='object')countries=Object.keys(d).map(id=>({id,name:id,code:''}))}let sv=await vak('getServices');let services=[];if(Array.isArray(sv))services=sv;else if(sv&&typeof sv==='object')services=Object.entries(sv).map(([id,v])=>({id,name:v?.name||v?.title||id}));if(!services.length){const d=await vak('getPrices');const ids=new Set();const walk=o=>{if(!o||typeof o!=='object')return;Object.entries(o).forEach(([k,v])=>{if(v&&typeof v==='object'){if(!countries.some(x=>String(x.id)===k)&&k.length<40)ids.add(k);walk(v)}})};walk(d);services=[...ids].map(id=>({id,name:id}))}c.countries=countries.map(x=>({id:String(x.id),name:String(x.name||x.id),code:x.code||''}));c.services=services.map(x=>({id:String(x.id||x.service),name:String(x.name||x.title||x.id||x.service),price:oldPrice.get(String(x.id||x.service))||0}));await c.save();return {countries:c.countries.length,services:c.services.length};}
 async function sync(server,bot,uid){const r=server==='5sim'?await importFive():await importVak();await bot.telegram.sendMessage(uid,`✅ Import/Sync completed\n\n🌍 Countries: ${r.countries}\n📦 Services: ${r.services}`);}
 function adminMenu(server){return Markup.inlineKeyboard([[Markup.button.callback('📥 Import / Sync','nsi_import_'+server)],[Markup.button.callback('🗑 Remove All','nsi_remove_'+server)],[Markup.button.callback('💰 Set Price','nsi_price_'+server)],[Markup.button.callback('📈 Set Profit %','nsi_profit_'+server)],[Markup.button.callback('📋 View Settings',`nsi_view_${server}`)],[Markup.button.callback('⬅ Number Servers','admin_servers')]])}
-try{const old=Telegram.prototype.callApi;Telegram.prototype.callApi=async function(method,payload,...args){try{if(method==='sendMessage'&&payload&&String(payload.text||'').includes('⚙️ 5SIM SETTINGS')||method==='sendMessage'&&payload&&String(payload.text||'').includes('⚙️ VAK-SMS SETTINGS')){if(payload.reply_markup){const kb=payload.reply_markup.inline_keyboard||[];if(!kb.some(r=>r.some(b=>String(b.callback_data||'').startsWith('nsi_import_')))){kb.push([{text:'📥 Import / Sync',callback_data:'nsi_import_'+(String(payload.text).includes('5SIM')?'5sim':'vak')}],[{text:'🗑 Remove All',callback_data:'nsi_remove_'+(String(payload.text).includes('5SIM')?'5sim':'vak')}],[{text:'💰 Set Price',callback_data:'nsi_price_'+(String(payload.text).includes('5SIM')?'5sim':'vak')}],[{text:'📈 Set Profit %',callback_data:'nsi_profit_'+(String(payload.text).includes('5SIM')?'5sim':'vak')}]);payload.reply_markup.inline_keyboard=kb}}}catch{}return old.call(this,method,payload,...args)}}catch{}
-const previous=Telegraf.prototype.handleUpdate;Telegraf.prototype.handleUpdate=async function(update,...args){try{const q=update?.callback_query,cb=q?.data||'',uid=q?.from?.id;if(uid&&await admin(uid)){if(cb==='ns_5sim'||cb==='ns_vak'){try{await this.telegram.answerCbQuery(q.id)}catch{};return this.telegram.sendMessage(uid,`⚙️ ${cb==='ns_5sim'?'5SIM':'VAK-SMS'} SETTINGS`,adminMenu(cb==='ns_5sim'?'5sim':'vak'))}if(cb.startsWith('nsi_import_')){const s=cb.slice(11);try{await this.telegram.answerCbQuery(q.id,'⏳ Importing...')}catch{};try{return sync(s,this,uid)}catch(e){return this.telegram.sendMessage(uid,'❌ '+e.message)}}if(cb.startsWith('nsi_remove_')){const s=cb.slice(11),c=await cfg(s);c.countries=[];c.services=[];c.operators=[];await c.save();try{await this.telegram.answerCbQuery(q.id)}catch{};return this.telegram.sendMessage(uid,'✅ All imported countries & services removed.')}if(cb.startsWith('nsi_price_')||cb.startsWith('nsi_profit_')){const s=cb.split('_').pop(),type=cb.startsWith('nsi_price_')?'price':'profit';states.set(String(uid),{server:s,type});try{await this.telegram.answerCbQuery(q.id)}catch{};return this.telegram.sendMessage(uid,type==='price'?'💰 Send default service price in ₹. Example: 50':'📈 Send default profit percentage. Example: 20')}}if(uid&&update.message?.chat?.type==='private'&&update.message?.text&&!update.message.text.startsWith('/')&&states.has(String(uid))&&await admin(uid)){const st=states.get(String(uid));states.delete(String(uid));const c=await cfg(st.server);const n=Number(update.message.text.trim());if(!Number.isFinite(n)||n<0)return this.telegram.sendMessage(uid,'❌ Invalid number');if(st.type==='price')c.services.forEach(x=>x.price=n);else c.markup=n;await c.save();return this.telegram.sendMessage(uid,`✅ ${st.type==='price'?'Price':'Profit %'} saved: ${n}${st.type==='profit'?'%':'₹'}`)}if(q&&uid){if(cb.startsWith('nsi_country_')){try{await this.telegram.answerCbQuery(q.id)}catch{};return render(this,q,cb.split('_')[2],dec(cb.split('_')[3]),1)}if(cb.startsWith('nsi_c_')){const p=cb.split('_');try{await this.telegram.answerCbQuery(q.id)}catch{};return renderCountries(this,q,p[2],Number(p[3])||1)}if(cb.startsWith('nsi_s_')){const p=cb.split('_');try{await this.telegram.answerCbQuery(q.id)}catch{};return render(this,q,p[2],dec(p[3]),Number(p[4])||1)}}}catch(e){console.log('IMPORT PRICING BOOT:',e.message)}return previous.call(this,update,...args)};
+const previous=Telegraf.prototype.handleUpdate;
+Telegraf.prototype.handleUpdate=async function(update,...args){
+  try{
+    const q=update?.callback_query,cb=q?.data||'',uid=q?.from?.id;
+    if(uid&&await admin(uid)){
+      if(cb==='ns_5sim'||cb==='ns_vak'){
+        try{await this.telegram.answerCbQuery(q.id)}catch{}
+        return this.telegram.sendMessage(uid,`⚙️ ${cb==='ns_5sim'?'5SIM':'VAK-SMS'} SETTINGS`,adminMenu(cb==='ns_5sim'?'5sim':'vak'));
+      }
+      if(cb.startsWith('nsi_import_')){
+        const s=cb.slice(11);
+        try{await this.telegram.answerCbQuery(q.id,'⏳ Importing...')}catch{}
+        try{return await sync(s,this,uid)}catch(e){return this.telegram.sendMessage(uid,'❌ '+e.message)}
+      }
+      if(cb.startsWith('nsi_remove_')){
+        const s=cb.slice(11),c=await cfg(s);c.countries=[];c.services=[];c.operators=[];await c.save();
+        try{await this.telegram.answerCbQuery(q.id)}catch{}
+        return this.telegram.sendMessage(uid,'✅ All imported countries & services removed.');
+      }
+      if(cb.startsWith('nsi_price_')||cb.startsWith('nsi_profit_')){
+        const s=cb.split('_').pop(),type=cb.startsWith('nsi_price_')?'price':'profit';states.set(String(uid),{server:s,type});
+        try{await this.telegram.answerCbQuery(q.id)}catch{}
+        return this.telegram.sendMessage(uid,type==='price'?'💰 Send default service price in ₹. Example: 50':'📈 Send default profit percentage. Example: 20');
+      }
+      if(uid&&update.message?.chat?.type==='private'&&update.message?.text&&!update.message.text.startsWith('/')&&states.has(String(uid))&&await admin(uid)){
+        const st=states.get(String(uid));states.delete(String(uid));const c=await cfg(st.server);const n=Number(update.message.text.trim());
+        if(!Number.isFinite(n)||n<0)return this.telegram.sendMessage(uid,'❌ Invalid number');
+        if(st.type==='price')c.services.forEach(x=>x.price=n);else c.markup=n;
+        await c.save();return this.telegram.sendMessage(uid,`✅ ${st.type==='price'?'Price':'Profit %'} saved: ${n}${st.type==='profit'?'%':'₹'}`);
+      }
+      if(q&&uid){
+        if(cb.startsWith('nsi_country_')){try{await this.telegram.answerCbQuery(q.id)}catch{};return render(this,q,cb.split('_')[2],dec(cb.split('_')[3]),1)}
+        if(cb.startsWith('nsi_c_')){const p=cb.split('_');try{await this.telegram.answerCbQuery(q.id)}catch{};return renderCountries(this,q,p[2],Number(p[3])||1)}
+        if(cb.startsWith('nsi_s_')){const p=cb.split('_');try{await this.telegram.answerCbQuery(q.id)}catch{};return render(this,q,p[2],dec(p[3]),Number(p[4])||1)}
+      }
+    }
+  }catch(e){console.log('IMPORT PRICING BOOT:',e.message)}
+  return previous.call(this,update,...args);
+};
