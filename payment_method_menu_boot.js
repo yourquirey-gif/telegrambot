@@ -7,7 +7,9 @@ Telegraf.prototype.handleUpdate = async function(update, ...args) {
     const uid = from?.id;
     const cb = update?.callback_query?.data || '';
 
-    if (uid && cb === 'manual_payment') {
+    // The main bot's Add Balance button uses callback `buy`.
+    // Replace only that entrypoint with the new payment-method menu.
+    if (uid && cb === 'buy') {
       try { await this.telegram.answerCbQuery(update.callback_query.id); } catch {}
       return this.telegram.sendMessage(
         uid,
@@ -15,7 +17,7 @@ Telegraf.prototype.handleUpdate = async function(update, ...args) {
         Markup.inlineKeyboard([
           [Markup.button.callback('⚡ Automatic Payment', 'automatic_payment')],
           [Markup.button.callback('🤖 Pay By Bot', 'bot_payment')],
-          [Markup.button.callback('❌ Cancel', 'buy')]
+          [Markup.button.callback('❌ Cancel', 'home')]
         ])
       );
     }
