@@ -4,110 +4,192 @@ const { Telegraf, Markup } = require('telegraf');
 
 const BASE = 'https://api.temporasms.com/stubs/handler_api.php';
 const KEY = process.env.TEMPORASMS_API_KEY || process.env.TEMPO_API_KEY || process.env.TEMPO_SMS_API_KEY || '';
-const cache = new Map();
 const enc = x => encodeURIComponent(String(x));
 const dec = x => { try { return decodeURIComponent(x); } catch { return String(x); } };
 const norm = x => String(x ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 
 async function tempo(action, params = {}) {
   if (!KEY) throw new Error('TemporaSMS API key is not configured');
-  return (await axios.get(BASE, { params: { action, api_key: KEY, ...params }, timeout: 20000, headers: { Accept: 'application/json' } })).data;
+  return (await axios.get(BASE, {
+    params: { action, api_key: KEY, ...params },
+    timeout: 20000,
+    headers: { Accept: 'application/json' }
+  })).data;
 }
+
 async function cfg() {
-  try { return await mongoose.connection.db.collection('number_server_configs').findOne({ server: 'tempo' }); } catch { return null; }
+  try { return await mongoose.connection.db.collection('number_server_configs').findOne({ server: 'tempo' }); }
+  catch { return null; }
 }
+
 function countryName(id, c) {
   const x = (c?.countries || []).find(v => String(v.id ?? v.countryId ?? v.code) === String(id));
   return String(x?.name || x?.title || x?.text_en || x?.eng || x?.rus || id).replace(/[_-]+/g, ' ');
 }
+
+function raw(v) {
+  if (typeof v !== 'string') return v;
+  try { return JSON.parse(v); } catch { return v; }
+}
+
 function block(v) {
+  v = raw(v);
   let p = 0, stock = 0;
   const walk = o => {
+    o = raw(o);
     if (!o || typeof o !== 'object') return;
     if (Array.isArray(o)) return o.forEach(walk);
     for (const k of ['cost','price','rate','sell_price','buy_price','Price']) {
-      const n = Number(o[k]); if (Number.isFinite(n) && n > 0) p = p ? Math.min(p, n) : n;
+      const n = Number(o[k]);
+      if (Number.isFinite(n) && n > 0) p = p ? Math.min(p, n) : n;
     }
-    for (const k of ['count','stock','qty','quantity','available','Qty']) {
-      const n = Number(o[k]); if (Number.isFinite(n) && n >= 0) stock += n;
+    for (const k of ['count','stock','qty','quantity','available','Qty','countStock']) {
+      const n = Number(o[k]);
+      if (Number.isFinite(n) && n >= 0) stock += n;
     }
-    for (const [k,x] of Object.entries(o)) if (!['cost','price','rate','sell_price','buy_price','Price','count','stock','qty','quantity','available','Qty'].includes(k) && x && typeof x === 'object') walk(x);
+    for (const [k, x] of Object.entries(o)) {
+      if (!['cost','price','rate','sell_price','buy_price','Price','count','stock','qty','quantity','available','Qty','countStock'].includes(k) && x && typeof x === 'object') walk(x);
+    }
   };
-  walk(v); return { p, stock };
+  walk(v);
+  return { p, stock };
 }
+
+function findServiceCountry(tree, serviceId, countryId) {
+  tree = raw(tree);
+  const sid = norm(serviceId), cid = String(countryId);
+  let best = null;
+  const walk = (o, path = []) => {
+    o = raw(o);
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return;
+    for (const [k, v] of Object.entries(o)) {
+      if (!v || typeof v !== 'object') continue;
+      const nk = norm(k);
+      const next = path.concat(String(k));
+      const hasService = nk === sid || next.some(x => norm(x) === sid);
+      const hasCountry = String(k) === cid || next.some(x => String(x) === cid);
+      if (hasService && hasCountry) {
+        const b = block(v);
+        if (b.p > 0 || b.stock > 0) best = best ? { p: Math.min(best.p || Infinity, b.p || Infinity), stock: Math.max(best.stock, b.stock) } : b;
+      }
+      walk(v, next);
+    }
+  };
+  walk(tree);
+  if (best && !Number.isFinite(best.p)) best.p = 0;
+  return best;
+}
+
 async function priceTreesFresh() {
   const trees = [];
-  let ops = [];
-  try {
-    const d = await tempo('getOperators', {});
-    if (Array.isArray(d)) ops = d.map(x => String(x?.id ?? x?.code ?? x?.operator ?? x)).filter(Boolean);
-    else if (d && typeof d === 'object') ops = Object.entries(d).map(([k,v]) => String(v?.id ?? v?.code ?? v?.operator ?? k)).filter(Boolean);
-    else if (typeof d === 'string') ops = d.replace(/^OK:/i,'').split(/[,;|\n]+/).map(x=>x.trim()).filter(Boolean);
-  } catch (e) { console.log('TEMPO LIVE OPERATORS ERROR:', e.response?.data || e.message); }
-  ops = [...new Set(ops)].filter(x => x.toLowerCase() !== 'any').slice(0, 40);
-  for (const operator of ops) {
+  // Current API versions expose full live price/stock by country/service/provider.
+  // Prefer these endpoints so we do not depend on a particular operator list.
+  for (const action of ['getPricesV3', 'getPricesV2', 'getPrices']) {
     try {
-      const d = await tempo('getPrices', { operator });
-      if (d && typeof d === 'object' && !Array.isArray(d)) trees.push(d);
-    } catch (e) { console.log('TEMPO LIVE PRICE ERROR:', operator, e.response?.data || e.message); }
+      const d = raw(await tempo(action, {}));
+      if (d && typeof d === 'object') {
+        trees.push(d);
+        console.log('TEMPO LIVE PRICE SOURCE:', action);
+        if (action !== 'getPrices') break;
+      }
+    } catch (e) {
+      console.log('TEMPO LIVE PRICE SOURCE ERROR:', action, e.response?.data || e.message);
+    }
   }
+  // Fallback for installations where full-price endpoints are unavailable.
   if (!trees.length) {
-    for (const action of ['getPricesV3','getPricesV2','getPrices']) {
+    let ops = [];
+    try {
+      const d = raw(await tempo('getOperators', {}));
+      if (Array.isArray(d)) ops = d.map(x => String(x?.id ?? x?.code ?? x?.operator ?? x)).filter(Boolean);
+      else if (d && typeof d === 'object') ops = Object.entries(d).map(([k,v]) => String(v?.id ?? v?.code ?? v?.operator ?? k)).filter(Boolean);
+      else if (typeof d === 'string') ops = d.replace(/^OK:/i,'').split(/[,;|\n]+/).map(x => x.trim()).filter(Boolean);
+    } catch (e) { console.log('TEMPO LIVE OPERATORS ERROR:', e.response?.data || e.message); }
+    ops = [...new Set(ops)].filter(x => x.toLowerCase() !== 'any').slice(0, 40);
+    for (const operator of ops) {
       try {
-        const d = await tempo(action, {});
-        if (d && typeof d === 'object' && !Array.isArray(d)) { trees.push(d); console.log('TEMPO LIVE PRICE FALLBACK:', action); break; }
-      } catch (e) { console.log('TEMPO LIVE PRICE FALLBACK ERROR:', action, e.response?.data || e.message); }
+        const d = raw(await tempo('getPrices', { operator }));
+        if (d && typeof d === 'object') trees.push(d);
+      } catch (e) { console.log('TEMPO LIVE OPERATOR PRICE ERROR:', operator, e.response?.data || e.message); }
     }
   }
   return trees;
 }
+
 function countriesFromTree(d, service, names, out = new Map()) {
-  const svc = String(service), ns = norm(service);
-  const walk = o => {
+  d = raw(d);
+  const sid = norm(service);
+  const walk = (o, path = []) => {
+    o = raw(o);
     if (!o || typeof o !== 'object' || Array.isArray(o)) return;
-    for (const [k,v] of Object.entries(o)) {
+    for (const [k, v] of Object.entries(o)) {
       if (!v || typeof v !== 'object') continue;
-      if (norm(k) === ns) {
-        for (const [country,val] of Object.entries(v)) {
+      const next = path.concat(String(k));
+      if (norm(k) === sid || path.some(x => norm(x) === sid)) {
+        // At a service node, inspect its direct country children first.
+        for (const [country, val] of Object.entries(v)) {
           const b = block(val);
-          if (b.p > 0 || b.stock > 0) out.set(String(country), { id:String(country), name:countryName(country,names), ...b });
+          if (b.p > 0 || b.stock > 0) out.set(String(country), { id: String(country), name: String(names.get(String(country)) || country).replace(/[_-]+/g,' '), ...b });
         }
-        continue;
       }
-      if (v[svc] && typeof v[svc] === 'object') {
-        const b = block(v[svc]);
-        if (b.p > 0 || b.stock > 0) out.set(String(k), { id:String(k), name:countryName(k,names), ...b });
-      }
-      for (const [sk,sv] of Object.entries(v)) if (norm(sk) === ns && sv && typeof sv === 'object') {
-        const b = block(sv);
-        if (b.p > 0 || b.stock > 0) out.set(String(k), { id:String(k), name:countryName(k,names), ...b });
-      }
-      walk(v);
+      walk(v, next);
     }
   };
-  walk(d); return out;
+  walk(d);
+  return out;
 }
+
 async function liveCountries(serviceId) {
   const c = await cfg();
-  const names = new Map((c?.countries || []).map(x => [String(x.id ?? x.countryId ?? x.code), String(x.name || x.title || x.text_en || x.eng || x.rus || x.countryName || x.id)]));
+  const names = new Map((c?.countries || []).map(x => [
+    String(x.id ?? x.countryId ?? x.code),
+    String(x.name || x.title || x.text_en || x.eng || x.rus || x.countryName || x.id)
+  ]));
   const out = new Map();
   for (const tree of await priceTreesFresh()) countriesFromTree(tree, serviceId, names, out);
+  // If the full tree parser cannot identify the service, ask the API directly for each
+  // configured country. This is slower but guarantees a fresh price/stock check.
+  if (!out.size) {
+    for (const country of (c?.countries || []).slice(0, 250)) {
+      try {
+        const d = raw(await tempo('getPrices', { country: String(country.id ?? country.code), service: String(serviceId) }));
+        const b = block(d);
+        if (b.p > 0 || b.stock > 0) out.set(String(country.id ?? country.code), {
+          id: String(country.id ?? country.code),
+          name: String(country.name || country.title || country.text_en || country.eng || country.rus || country.id),
+          ...b
+        });
+      } catch {}
+    }
+  }
   return [...out.values()].sort((a,b)=>a.name.localeCompare(b.name));
 }
+
 async function livePriceFor(serviceId, countryId) {
+  // Exact live check for the selected country + service immediately before purchase.
+  for (const action of ['getPricesV3','getPricesV2','getPrices']) {
+    try {
+      const d = raw(await tempo(action, { country: String(countryId), service: String(serviceId) }));
+      const b = findServiceCountry(d, serviceId, countryId) || block(d);
+      if (b && (b.p > 0 || b.stock > 0)) return { id: String(countryId), p: Number(b.p || 0), stock: Number(b.stock || 0) };
+    } catch (e) { console.log('TEMPO EXACT LIVE PRICE ERROR:', action, e.response?.data || e.message); }
+  }
   const all = await liveCountries(serviceId);
   return all.find(x => String(x.id) === String(countryId)) || null;
 }
+
 function sell(p,c) {
-  let x = Number(p || 0), f = Number(c?.profit || c?.profitAmount || 0), q = Number(c?.profitPercent || c?.markup || 0);
+  let x = Number(p || 0), f = Number(c?.profit || c?.profitAmount || 0), q = Number(c?.profitPercent || c?.markup || c?.profit_percentage || 0);
   if (f > 0) x += f;
   if (q > 0) x *= 1 + q / 100;
   return Math.ceil(x * 100) / 100;
 }
+
 async function rate() {
   try { const x = await mongoose.connection.db.collection('settings').findOne({ key:'usdtInrRate' }); if (Number(x?.value) > 0) return Number(x.value); } catch {}
   return 100;
 }
+
 async function userModel() { return mongoose.models.User; }
 
 async function showLiveService(bot, q, sid) {
@@ -142,30 +224,39 @@ async function buyTempo(bot, q, countryId, serviceId) {
   const c = await cfg();
   const rr = await rate();
   const price = sell(Number(live.p) * rr, c);
-  if (user.credits < price) return bot.telegram.sendMessage(uid,`❌ Not enough credits\n\n💎 Required: ${price}\n💰 Balance: ${user.credits}`);
+  if (Number(user.credits || 0) < price) return bot.telegram.sendMessage(uid,`❌ Not enough credits\n\n💎 Required: ${price}\n💰 Balance: ${user.credits}`);
 
   try { await bot.telegram.answerCbQuery(q.id, '📡 Buying from TemporaSMS live stock...'); } catch {}
   let response = null, lastError = null;
   for (const action of ['getNumberV2','getNumber']) {
     try {
+      // Let Tempora choose the cheapest eligible live route and lock the checked max price.
       response = await tempo(action, { service:String(serviceId), country:String(countryId), operator:'auto', maxPrice:Number(live.p) });
       if (response) break;
     } catch (e) { lastError = e; }
   }
   console.log('TEMPO LIVE BUY RESPONSE:', response || lastError?.response?.data || lastError?.message);
 
-  let id='', phone='', actualPrice=price;
+  let id='', phone='', actualProviderPrice=Number(live.p);
   if (response && typeof response === 'object') {
     id = String(response.activationId ?? response.id ?? response.orderId ?? response.activation_id ?? '');
     phone = String(response.phoneNumber ?? response.phone ?? response.number ?? '');
-    if (Number(response.activationCost) > 0) actualPrice = sell(Number(response.activationCost) * rr, c);
+    if (Number(response.activationCost) > 0) actualProviderPrice = Number(response.activationCost);
   } else if (typeof response === 'string' && response.startsWith('ACCESS_NUMBER:')) {
     const p = response.split(':'); id = String(p[1] || ''); phone = p.slice(2).join(':');
   }
   if (!id || !phone) {
     return bot.telegram.sendMessage(uid,`❌ TemporaSMS could not allocate a number.\n\n${typeof response === 'string' ? response : (lastError?.response?.data || 'NO_NUMBERS')}`);
   }
-  if (user.credits < actualPrice) return bot.telegram.sendMessage(uid,`❌ Live provider price changed.\n\nRequired: ${actualPrice}\nBalance: ${user.credits}`);
+
+  const actualPrice = sell(actualProviderPrice * rr, c);
+  if (Number(user.credits || 0) < actualPrice) {
+    // Provider has already allocated the number; cancel it before telling the user
+    // they cannot afford the live final price.
+    try { await tempo('setStatus', { id, status: 8 }); } catch (e) { console.log('TEMPO REFUND CANCEL ERROR:', e.response?.data || e.message); }
+    return bot.telegram.sendMessage(uid,`❌ Live provider price changed. Order cancelled.\n\nRequired: ${actualPrice}\nBalance: ${user.credits}`);
+  }
+
   user.activeOrder = true;
   user.activeOrderId = `tempo:${id}`;
   await user.save();
@@ -173,8 +264,8 @@ async function buyTempo(bot, q, countryId, serviceId) {
   return bot.telegram.sendMessage(uid,
 `╔══════════════════════╗\n 📱 NUMBER ALLOCATED\n╚══════════════════════╝\n\n🖥 Server : 1 • TemporaSMS\n🌍 Country : ${countryName(countryId,c)}\n✅ Service : ${String(serviceId).toUpperCase()}\n📱 Number : <code>+${phone.replace(/^\+/,'')}</code>\n🆔 Order ID : <code>${id}</code>\n\n💎 Price : ${actualPrice} credits\n📡 Stock/Price : Live`,
     { parse_mode:'HTML', ...Markup.inlineKeyboard([
-      [Markup.button.callback('❌ Cancel',`tempo_cancel_${enc(id)}`)],
-      [Markup.button.callback('🔄 Check OTP',`tempo_otp_${enc(id)}:${enc(serviceId)}:${enc(actualPrice)}`)],
+      [Markup.button.callback('❌ Cancel',`tempo_cancel:${enc(id)}`)],
+      [Markup.button.callback('🔄 Check OTP',`tempo_otp:${enc(id)}:${enc(serviceId)}:${enc(actualPrice)}`)],
       [Markup.button.callback('🏠 Home','home')]
     ]) });
 }
