@@ -1,6 +1,5 @@
 const { Telegraf, Markup } = require('telegraf');
 
-// Add Balance -> choose Automatic Payment or the existing bot/manual payment flow.
 const previousHandleUpdate = Telegraf.prototype.handleUpdate;
 Telegraf.prototype.handleUpdate = async function(update, ...args) {
   try {
@@ -21,17 +20,6 @@ Telegraf.prototype.handleUpdate = async function(update, ...args) {
       );
     }
 
-    // Send automatic-payment selection onward. omniupi_payment_boot.js handles this.
-    if (uid && cb === 'automatic_payment') {
-      try { await this.telegram.answerCbQuery(update.callback_query.id); } catch {}
-      const forwarded = {
-        ...update,
-        callback_query: { ...update.callback_query, data: 'omni_start_payment' }
-      };
-      return previousHandleUpdate.call(this, forwarded, ...args);
-    }
-
-    // Existing payment-by-bot flow: delegate to the old payment system unchanged.
     if (uid && cb === 'bot_payment') {
       try { await this.telegram.answerCbQuery(update.callback_query.id); } catch {}
       const forwarded = {
@@ -44,5 +32,6 @@ Telegraf.prototype.handleUpdate = async function(update, ...args) {
     console.log('PAYMENT METHOD MENU ERROR:', e.message);
   }
 
+  // automatic_payment is passed through to the OmniUPI boot loaded after this file.
   return previousHandleUpdate.call(this, update, ...args);
 };
