@@ -1,11 +1,6 @@
 const { Telegraf, Markup } = require('telegraf');
 const mongoose = require('mongoose');
 
-const Setting = mongoose.models.Setting || mongoose.model('Setting', new mongoose.Schema({
-  key: String,
-  value: mongoose.Schema.Types.Mixed
-}, { collection: 'settings' }));
-
 const previousHandleUpdate = Telegraf.prototype.handleUpdate;
 
 Telegraf.prototype.handleUpdate = async function(update, ...args) {
@@ -13,13 +8,14 @@ Telegraf.prototype.handleUpdate = async function(update, ...args) {
     const cb = update?.callback_query?.data || '';
     const uid = String(update?.callback_query?.from?.id || update?.message?.from?.id || '');
 
-    // The main index.js buy handler still opens the old one-button payment page.
-    // Replace only that entrypoint with the new payment-method menu.
+    // Replace the old buy entrypoint without defining a duplicate Setting model.
     if (uid && cb === 'buy') {
       let rate = 5;
       try {
-        const s = await Setting.findOne({ key: 'pricePerCredit' });
-        if (s) rate = Number(s.value) || 5;
+        if (mongoose.connection?.readyState === 1) {
+          const s = await mongoose.connection.collection('settings').findOne({ key: 'pricePerCredit' });
+          if (s) rate = Number(s.value) || 5;
+        }
       } catch {}
 
       try { await this.telegram.answerCbQuery(update.callback_query.id); } catch {}
