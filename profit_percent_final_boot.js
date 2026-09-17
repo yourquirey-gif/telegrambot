@@ -1,13 +1,28 @@
 const mongoose=require('mongoose');
 const axios=require('axios');
 const {Telegraf,Markup}=require('telegraf');
+const OWNER_ID=5087094625;
 const FIVE='https://5sim.net/v1', VAK='https://vak-sms.com/stubs/handler_api.php';
 const FIVE_KEY=process.env.FIVESIM_API_KEY||process.env.FIVE_SIM_API_KEY||process.env['5SIM_API_KEY']||'';
 const VAK_KEY=process.env.VAKSMS_API_KEY||'';
+const adminState=new Map();
 const enc=x=>encodeURIComponent(String(x));
+async function isAdmin(id){if(Number(id)===OWNER_ID)return true;try{return !!(await mongoose.models.Admin?.findOne({userId:String(id)}));}catch{return false;}}
 async function cfg(server){return mongoose.connection.db.collection('number_server_configs').findOne({server});}
+async function saveCfg(server,changes){return mongoose.connection.db.collection('number_server_configs').updateOne({server},{$set:changes},{upsert:true});}
 async function rate(){try{const d=await mongoose.connection.db.collection('settings').findOne({key:'usdtInrRate'});const n=Number(d?.value);return n>0?n:100}catch{return 100}}
 function sell(base,c){const p=Number(base||0),m=Number(c?.markup??c?.profitPercent??c?.profit_percentage??0);return Math.ceil(p*(1+(Number.isFinite(m)&&m>0?m:0)/100));}
+function settingsMenu(server,c){const title=server==='vak'?'VAK-SMS':'5SIM';return Markup.inlineKeyboard([
+ [Markup.button.callback('📥 Import / Sync All',`nsi_import_${server}`)],
+ [Markup.button.callback('🗑 Remove All',`nsi_remove_${server}`)],
+ [Markup.button.callback('💰 Set Price',`nsi_price_${server}`),Markup.button.callback('📈 Set Profit %',`nsi_profit_${server}`)],
+ [Markup.button.callback('🌍 Add Country',`vfix_${server}_add_country`),Markup.button.callback('🗑 Remove Country',`vfix_${server}_del_country`)],
+ [Markup.button.callback('📦 Add Service',`vfix_${server}_add_service`),Markup.button.callback('🗑 Remove Service',`vfix_${server}_del_service`)],
+ [Markup.button.callback('📋 Countries List',`nsl_${server}_countries_1`),Markup.button.callback('📋 Services List',`nsl_${server}_services_1`)],
+ [Markup.button.callback('🔎 Search Countries',`nss_${server}_countries`),Markup.button.callback('🔎 Search Services',`nss_${server}_services`)],
+ ...(server==='5sim' ? [[Markup.button.callback('📡 Operators List','nsl_5sim_operators_1')]] : []),
+ [Markup.button.callback('⬅ Number Servers','admin_servers')]
+]);}
 async function fivePrice(country,service,operator){const r=await axios.get(`${FIVE}/guest/prices`,{params:{country,product:service},timeout:15000});const b=r.data?.[country]?.[service];if(!b)return null;const v=operator&&operator!=='any'&&b[operator]?b[operator]:Object.values(b).sort((a,z)=>Number(a?.cost)-Number(z?.cost))[0];return Number(v?.cost)||null}
 async function vakPrice(country,service){const r=await axios.get(VAK,{params:{action:'getPrices',api_key:VAK_KEY,country,service},timeout:15000});const vals=[];const walk=o=>{if(!o||typeof o!=='object')return;if(Array.isArray(o)){o.forEach(walk);return}for(const k of ['cost','price','rate','sell_price','buy_price']){const n=Number(o[k]);if(n>0)vals.push(n)}Object.values(o).forEach(walk)};walk(r.data);return vals.length?Math.min(...vals):null}
 async function buy(update,bot,server,country,service){
@@ -37,4 +52,30 @@ async function buy(update,bot,server,country,service){
   return bot.telegram.sendMessage(uid,'❌ Server 2 did not return a number.');
 }
 const previous=Telegraf.prototype.handleUpdate;
-Telegraf.prototype.handleUpdate=async function(update,...args){try{const cb=update?.callback_query?.data||'',m=cb.match(/^ns_buy_(5sim|vak)_(.+?)_(.+)$/);if(m)return buy(update,this,m[1],decodeURIComponent(m[2]),decodeURIComponent(m[3]));}catch(e){console.log('PROFIT PERCENT FINAL:',e.message)}return previous.call(this,update,...args)};
+Telegraf.prototype.handleUpdate=async function(update,...args){
+  try{
+    const q=update?.callback_query,cb=q?.data||'',uid=q?.from?.id;
+    if(uid&&await isAdmin(uid)){
+      if(update.message?.chat?.type==='private'&&update.message?.text&&!String(update.message.text).startsWith('/')&&adminState.has(String(uid))){
+        const st=adminState.get(String(uid));adminState.delete(String(uid));
+        const n=Number(String(update.message.text).trim());
+        if(!Number.isFinite(n)||n<0)return this.telegram.sendMessage(uid,'❌ Invalid number. Enter a value 0 or greater.');
+        const c=await cfg(st.server);const changes=st.type==='profit'?{markup:n}:{services:(c?.services||[]).map(x=>({...x,price:n}))};
+        await saveCfg(st.server,changes);
+        const fresh=await cfg(st.server);
+        await this.telegram.sendMessage(uid,`✅ ${st.type==='profit'?'Profit %':'Price'} saved: ${n}${st.type==='profit'?'%':'₹'}`);
+        return this.telegram.sendMessage(uid,`⚙️ ${st.server==='vak'?'VAK-SMS':'5SIM'} SETTINGS\n\nCountries: ${(fresh?.countries||[]).length}\nServices: ${(fresh?.services||[]).length}${st.server==='5sim'?`\nOperators: ${(fresh?.operators||[]).length}`:''}\nProfit: ${Number(fresh?.markup||0)}%`,settingsMenu(st.server,fresh));
+      }
+      if((cb.startsWith('nsi_profit_')||cb.startsWith('nsi_price_'))){
+        const server=cb.startsWith('nsi_profit_')?'vak':'vak';
+        const parts=cb.split('_');const s=parts[2]||'vak';
+        adminState.set(String(uid),{server:s,type:cb.startsWith('nsi_profit_')?'profit':'price'});
+        try{await this.telegram.answerCbQuery(q.id)}catch{}
+        return this.telegram.sendMessage(uid,cb.startsWith('nsi_profit_')?'📈 Send default profit percentage. Example: 20':'💰 Send default service price in ₹. Example: 50');
+      }
+    }
+    const m=cb.match(/^ns_buy_(5sim|vak)_(.+?)_(.+)$/);
+    if(m)return buy(update,this,m[1],decodeURIComponent(m[2]),decodeURIComponent(m[3]));
+  }catch(e){console.log('PROFIT PERCENT FINAL:',e.message)}
+  return previous.call(this,update,...args)
+};
