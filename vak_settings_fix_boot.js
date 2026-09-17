@@ -18,15 +18,12 @@ async function cfg(server){
 }
 function menu(bot,uid,server){
   const title=server==='vak'?'VAK-SMS':'5SIM';
-  const buttons = server==='vak' ? [
+  const buttons = [
     [Markup.button.callback('🌍 Add Country',`vfix_${server}_add_country`),Markup.button.callback('🗑 Remove Country',`vfix_${server}_del_country`)],
     [Markup.button.callback('📦 Add Service',`vfix_${server}_add_service`),Markup.button.callback('🗑 Remove Service',`vfix_${server}_del_service`)],
-    [Markup.button.callback('⬅ Number Servers','admin_servers')]
-  ] : [
-    [Markup.button.callback('🌍 Add Country',`vfix_${server}_add_country`),Markup.button.callback('🗑 Remove Country',`vfix_${server}_del_country`)],
-    [Markup.button.callback('📦 Add Service',`vfix_${server}_add_service`),Markup.button.callback('🗑 Remove Service',`vfix_${server}_del_service`)],
-    [Markup.button.callback('📡 Add Operator',`vfix_${server}_add_operator`),Markup.button.callback('🗑 Remove Operator',`vfix_${server}_del_operator`)],
-    [Markup.button.callback('📈 Set Markup %',`vfix_${server}_markup`)],
+    ...(server==='5sim' ? [[Markup.button.callback('📡 Add Operator',`vfix_${server}_add_operator`),Markup.button.callback('🗑 Remove Operator',`vfix_${server}_del_operator`)]] : []),
+    [Markup.button.callback('📈 Set Profit %',`vfix_${server}_markup`)],
+    [Markup.button.callback('📋 View Settings',`vfix_${server}_view`)],
     [Markup.button.callback('⬅ Number Servers','admin_servers')]
   ];
   return bot.telegram.sendMessage(uid,`⚙️ ${title} SETTINGS\n\nManage only the settings required for this server.`,Markup.inlineKeyboard(buttons));
@@ -51,7 +48,8 @@ Telegraf.prototype.handleUpdate = async function(update,...args){
           else if(st.action==='add_operator') {if(p.length<3) throw new Error('Format: country | service | operator'); c.operators=c.operators.filter(x=>!(x.country===p[0]&&x.service===p[1])); c.operators.push({country:p[0],service:p[1],operator:p[2]});}
           else if(st.action==='del_operator') c.operators=c.operators.filter(x=>!(x.country===p[0]&&x.service===p[1]&&x.operator===p[2]));
           else if(st.action==='markup') {const n=Number(text);if(!Number.isFinite(n)||n<0)throw new Error('Enter valid percentage');c.markup=n;}
-          await c.save(); await this.telegram.sendMessage(uid,'✅ Saved successfully.');
+          else throw new Error('Unknown setting');
+          await c.save(); await this.telegram.sendMessage(uid,`✅ Profit percentage saved: ${Number(c.markup || 0)}%`);
         }catch(e){await this.telegram.sendMessage(uid,`❌ ${e.message}`);}
         return menu(this,uid,st.server);
       }
@@ -64,10 +62,15 @@ Telegraf.prototype.handleUpdate = async function(update,...args){
       const m=cb.match(/^vfix_(5sim|vak)_(add_country|del_country|add_service|del_service|add_operator|del_operator|markup)$/);
       if(m){
         const server=m[1],action=m[2];
-        if(server==='vak' && ['add_operator','del_operator','markup'].includes(action)) return this.telegram.answerCbQuery(update.callback_query.id,'Not used for VAK-SMS',{show_alert:true});
+        if(server==='vak' && ['add_operator','del_operator'].includes(action)) return this.telegram.answerCbQuery(update.callback_query.id,'Not used for VAK-SMS',{show_alert:true});
         state.set(String(uid),{server,action}); try{await this.telegram.answerCbQuery(update.callback_query.id)}catch{}
-        const prompts={add_country:server==='vak'?'✍️ Send: countryId | Display Name | Country Code':'✍️ Send: country-api-name | Display Name',del_country:'✍️ Send country ID to remove',add_service:server==='vak'?'✍️ Send: service-api-code | Display Name | Price':'✍️ Send: service-api-code | Display Name',del_service:'✍️ Send service ID to remove',add_operator:'✍️ Send: country | service | operator',del_operator:'✍️ Send: country | service | operator',markup:'✍️ Send markup percentage, e.g. 20'};
+        const prompts={add_country:server==='vak'?'✍️ Send: countryId | Display Name | Country Code':'✍️ Send: country-api-name | Display Name',del_country:'✍️ Send country ID to remove',add_service:server==='vak'?'✍️ Send: service-api-code | Display Name | Price':'✍️ Send: service-api-code | Display Name',del_service:'✍️ Send service ID to remove',add_operator:'✍️ Send: country | service | operator',del_operator:'✍️ Send: country | service | operator',markup:'✍️ Send profit percentage, e.g. 20'};
         return this.telegram.sendMessage(uid,prompts[action]);
+      }
+      const vm=cb.match(/^vfix_(5sim|vak)_view$/);
+      if(vm){
+        const c=await cfg(vm[1]);
+        return this.telegram.sendMessage(uid,`📋 ${vm[1].toUpperCase()} CONFIG\n\nCountries:\n${c.countries.map(x=>`${x.id} = ${x.name}`).join('\n')||'None'}\n\nServices:\n${c.services.map(x=>`${x.id} = ${x.name}${vm[1]==='vak'&&x.price?' • '+x.price+' credits':''}`).join('\n')||'None'}\n\nOperators:\n${c.operators.map(x=>`${x.country} | ${x.service} | ${x.operator}`).join('\n')||'None'}\n\nProfit: ${Number(c.markup || 0)}%`);
       }
     }
   }catch(e){console.log('VAK SETTINGS FIX ERROR:',e.message);}
