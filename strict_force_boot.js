@@ -9,8 +9,8 @@ const checkCache = new Map();
 const CACHE_MS = 8000;
 let legacyDefaultPurged = false;
 
-// Older versions created a default force-join channel automatically. Remove only
-// that legacy seed; real channels are never touched.
+// Older versions created default/automatic force-join entries. Clean those
+// known stale entries once, but never remove channels added later via /addforce.
 async function purgeLegacyDefault() {
   if (legacyDefaultPurged) return;
   legacyDefaultPurged = true;
@@ -19,7 +19,8 @@ async function purgeLegacyDefault() {
       $or: [
         { channel: "@updatechannelforotp" },
         { channel: "updatechannelforotp" },
-        { title: "Update Channel For OTP" }
+        { title: "Update Channel For OTP" },
+        { title: "OTP2CASH GROUP" }
       ]
     });
     checkCache.clear();
@@ -32,31 +33,6 @@ async function purgeLegacyDefault() {
 async function isStrictAdmin(userId) {
   if (Number(userId) === OWNER_ID) return true;
   return !!(await StrictAdmin.findOne({ userId: String(userId) }));
-}
-
-async function autoRegisterAdminChannel(bot, update) {
-  const change = update.my_chat_member;
-  if (!change?.chat || !change.new_chat_member || !['channel', 'supergroup'].includes(change.chat.type)) return false;
-  const member = change.new_chat_member;
-  if (member.status !== "creator" && member.status !== "administrator") return false;
-  const actorId = change.from?.id;
-  const chat = change.chat;
-
-  if (member.status === "administrator" && member.can_invite_users !== true) {
-    if (actorId) try { await bot.telegram.sendMessage(actorId, `❌ BOT PERMISSION MISSING\n\nThe bot is ADMIN on:\n📢 ${chat.title || chat.username || chat.id}\n\nBut it does NOT have:\n✅ Invite Users via Link\n\nPlease enable:\nChannel → Administrators → Bot → Invite Users via Link → ON\n\n⚠️ This channel cannot be used for strict force join until the permission is enabled.`); } catch {}
-    return true;
-  }
-
-  try {
-    const invite = await bot.telegram.createChatInviteLink(chat.id, { name: `ForceJoin-${Date.now().toString().slice(-8)}`, creates_join_request: false });
-    const publicRef = chat.username ? `@${chat.username}` : String(chat.id);
-    await StrictForceChannel.findOneAndUpdate({ chatId: String(chat.id) }, { channel: publicRef, chatId: String(chat.id), joinLink: invite.invite_link, title: chat.title || publicRef }, { upsert: true, new: true });
-    checkCache.clear();
-    if (actorId) try { await bot.telegram.sendMessage(actorId, `✅ FORCE JOIN AUTO-ADDED\n\n📢 ${chat.title || chat.username || chat.id}\n🆔 Chat ID: ${chat.id}\n\n🔗 Unique Invite Link:\n${invite.invite_link}\n\n🔒 Strict force join is now ACTIVE for this channel.`); } catch {}
-  } catch (err) {
-    if (actorId) try { await bot.telegram.sendMessage(actorId, `❌ INVITE LINK ERROR\n\nBot is ADMIN on:\n📢 ${chat.title || chat.username || chat.id}\n\nTelegram did not allow the bot to generate its unique invite link.\n\nRequired:\n✅ Bot ADMIN\n✅ Invite Users via Link permission\n\n${err.description || err.message}`); } catch {}
-  }
-  return true;
 }
 
 async function resolveChat(update) {
@@ -221,10 +197,8 @@ Telegraf.prototype.handleUpdate = async function(update, ...args) {
   try {
     await purgeLegacyDefault();
 
-    if (update?.my_chat_member) {
-      const handled = await autoRegisterAdminChannel(this, update);
-      if (handled) return true;
-    }
+    // Do NOT auto-add channels just because the bot becomes an admin.
+    // Force Join channels must be explicitly added with /addforce.
 
     const user = update?.message?.from || update?.callback_query?.from;
     const userId = user?.id;
