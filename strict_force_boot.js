@@ -7,32 +7,34 @@ const StrictForceChannel = mongoose.models.StrictForceChannel || mongoose.model(
 const StrictAdmin = mongoose.models.StrictAdmin || mongoose.model("StrictAdmin", new mongoose.Schema({ userId: String }, { collection: "admins" }));
 const checkCache = new Map();
 const CACHE_MS = 8000;
-let legacyDefaultPurged = false;
-
-// Older versions created default/automatic force-join entries. Clean those
-// known stale entries once, but never remove channels added later via /addforce.
-async function purgeLegacyDefault() {
-  if (legacyDefaultPurged) return;
-  legacyDefaultPurged = true;
-  try {
-    await StrictForceChannel.deleteMany({
-      $or: [
-        { channel: "@updatechannelforotp" },
-        { channel: "updatechannelforotp" },
-        { title: "Update Channel For OTP" },
-        { title: "OTP2CASH GROUP" }
-      ]
-    });
-    checkCache.clear();
-  } catch (err) {
-    legacyDefaultPurged = false;
-    console.log("Legacy Force Join cleanup error:", err.message);
-  }
-}
 
 async function isStrictAdmin(userId) {
   if (Number(userId) === OWNER_ID) return true;
   return !!(await StrictAdmin.findOne({ userId: String(userId) }));
+}
+
+async function autoRegisterAdminChannel(bot, update) {
+  const change = update.my_chat_member;
+  if (!change?.chat || !change.new_chat_member || !['channel', 'supergroup'].includes(change.chat.type)) return false;
+  const member = change.new_chat_member;
+  if (member.status !== "creator" && member.status !== "administrator") return false;
+  const actorId = change.from?.id;
+  const chat = change.chat;
+
+  if (member.status === "administrator" && member.can_invite_users !== true) {
+    if (actorId) try { await bot.telegram.sendMessage(actorId, `❌ BOT PERMISSION MISSING\n\nThe bot is ADMIN on:\n📢 ${chat.title || chat.username || chat.id}\n\nBut it does NOT have:\n✅ Invite Users via Link\n\nPlease enable:\nChannel → Administrators → Bot → Invite Users via Link → ON\n\n⚠️ This channel cannot be used for strict force join until the permission is enabled.`); } catch {}
+    return true;
+  }
+
+  try {
+    const invite = await bot.telegram.createChatInviteLink(chat.id, { name: `ForceJoin-${Date.now().toString().slice(-8)}`, creates_join_request: false });
+    const publicRef = chat.username ? `@${chat.username}` : String(chat.id);
+    await StrictForceChannel.findOneAndUpdate({ chatId: String(chat.id) }, { channel: publicRef, chatId: String(chat.id), joinLink: invite.invite_link, title: chat.title || publicRef }, { upsert: true, new: true });
+    if (actorId) try { await bot.telegram.sendMessage(actorId, `✅ FORCE JOIN AUTO-ADDED\n\n📢 ${chat.title || chat.username || chat.id}\n🆔 Chat ID: ${chat.id}\n\n🔗 Unique Invite Link:\n${invite.invite_link}\n\n🔒 Strict force join is now ACTIVE for this channel.`); } catch {}
+  } catch (err) {
+    if (actorId) try { await bot.telegram.sendMessage(actorId, `❌ INVITE LINK ERROR\n\nBot is ADMIN on:\n📢 ${chat.title || chat.username || chat.id}\n\nTelegram did not allow the bot to generate its unique invite link.\n\nRequired:\n✅ Bot ADMIN\n✅ Invite Users via Link permission\n\n${err.description || err.message}`); } catch {}
+  }
+  return true;
 }
 
 async function resolveChat(update) {
@@ -63,7 +65,6 @@ async function addForce(bot, userId, update) {
 }
 
 async function strictStatus(bot, userId) {
-  await purgeLegacyDefault();
   const channels = await StrictForceChannel.find();
   if (!channels.length) return bot.telegram.sendMessage(userId, "❌ No force-join channels configured.");
   const results = await Promise.all(channels.map(async ch => {
@@ -75,50 +76,27 @@ async function strictStatus(bot, userId) {
 }
 
 async function sendRemoveForceMenu(bot, userId) {
-  await purgeLegacyDefault();
-  const channels = await StrictForceChannel.find().sort({ _id: 1 }).lean();
+  const channels = await StrictForceChannel.find().sort({ _id: 1 });
   if (!channels.length) return bot.telegram.sendMessage(userId, "🗑 REMOVE FORCE JOIN\n\n❌ No force-join channels configured.");
   const rows = channels.map(ch => [Markup.button.callback(`🗑 ${ch.title || ch.channel || ch.chatId}`, `force_rm_${ch._id}`)]);
   rows.push([Markup.button.callback("⬅ Admin Panel", "admin_panel")]);
-  return bot.telegram.sendMessage(userId, "🗑 REMOVE FORCE JOIN\n\nSelect the force-join channel you want to delete:", Markup.inlineKeyboard(rows));
+  return bot.telegram.sendMessage(userId, "🗑 REMOVE FORCE JOIN\n\nSelect the force-join channel you want to remove:", Markup.inlineKeyboard(rows));
 }
 
 async function removeForceById(bot, userId, id) {
-  await purgeLegacyDefault();
   const removed = await StrictForceChannel.findByIdAndDelete(id);
   if (!removed) return bot.telegram.sendMessage(userId, "❌ Force channel not found or already removed.");
-  checkCache.clear();
-  await bot.telegram.sendMessage(userId, `✅ Force channel deleted:\n\n📢 ${removed.title || removed.channel || removed.chatId}`);
   return sendRemoveForceMenu(bot, userId);
-}
-
-function normaliseForceRef(value) {
-  let ref = String(value || "").trim().replace(/\/$/, "");
-  try {
-    const u = new URL(ref);
-    if (["t.me", "www.t.me", "telegram.me", "www.telegram.me"].includes(u.hostname.toLowerCase())) {
-      const path = u.pathname.replace(/^\/+/, "");
-      if (path && !path.startsWith("+") && !path.startsWith("joinchat/")) return `@${path}`;
-    }
-  } catch {}
-  return ref;
 }
 
 async function removeForce(bot, userId, update) {
-  await purgeLegacyDefault();
   const parts = String(update.message?.text || "").trim().split(/\s+/);
-  if (!parts[1]) return sendRemoveForceMenu(bot, userId);
-
-  const ref = normaliseForceRef(parts[1]);
-  const clean = ref.replace(/^@/, "");
-  const query = ref.startsWith("-100")
-    ? { chatId: ref }
-    : { $or: [{ chatId: ref }, { channel: ref }, { channel: clean }, { joinLink: ref }] };
+  if (!parts[1]) return bot.telegram.sendMessage(userId, "❌ Example: /removeforce -1001234567890");
+  const ref = parts[1];
+  const query = ref.startsWith("-100") ? { chatId: ref } : { $or: [{ chatId: ref }, { channel: ref }, { channel: ref.replace(/^@/, "") }] };
   const removed = await StrictForceChannel.findOneAndDelete(query);
-  if (!removed) return bot.telegram.sendMessage(userId, "❌ Force channel not found.\n\nUse /removeforce without an argument to see the current channel list.");
-  checkCache.clear();
-  await bot.telegram.sendMessage(userId, `✅ Force channel deleted:\n\n📢 ${removed.title || removed.channel || removed.chatId}`);
-  return sendRemoveForceMenu(bot, userId);
+  if (!removed) return bot.telegram.sendMessage(userId, "❌ Force channel not found.");
+  return bot.telegram.sendMessage(userId, `✅ Force channel removed:\n\n${removed.title || removed.channel}`);
 }
 
 async function strictJoinPrompt(bot, userId, pending) {
@@ -135,7 +113,6 @@ async function strictJoinPrompt(bot, userId, pending) {
 }
 
 async function strictCheck(bot, userId) {
-  await purgeLegacyDefault();
   const key = String(userId);
   const cached = checkCache.get(key);
   if (cached && Date.now() - cached.time < CACHE_MS) return cached.pending;
@@ -174,12 +151,49 @@ async function strictCheck(bot, userId) {
   return pending;
 }
 
-// Inject a dedicated remove button into the existing admin panel.
+// Fix the existing /start UI when an old force-channel record has a missing
+// joinLink. Do not change the existing force-join/admin design.
+async function repairLegacyJoinButtons(payload, telegram) {
+  try {
+    if (!payload || !String(payload.text || "").includes("Please join all channels first")) return;
+    const keyboard = payload.reply_markup?.inline_keyboard;
+    if (!Array.isArray(keyboard)) return;
+    const channels = await StrictForceChannel.find().lean();
+    if (!channels.length) return;
+
+    for (let i = 0; i < keyboard.length; i++) {
+      for (let j = 0; j < keyboard[i].length; j++) {
+        const button = keyboard[i][j];
+        if (!button || button.url !== "https://t.me") continue;
+        const ch = channels[i];
+        if (!ch) continue;
+        let link = ch.joinLink;
+        if (!link) {
+          try {
+            const invite = await telegram.createChatInviteLink(ch.chatId || ch.channel, { name: `ForceJoin-${Date.now().toString().slice(-8)}`, creates_join_request: false });
+            link = invite.invite_link;
+            await StrictForceChannel.updateOne({ _id: ch._id }, { $set: { joinLink: link } });
+          } catch {}
+        }
+        if (!link && ch.channel && !String(ch.channel).startsWith("-100")) {
+          link = `https://t.me/${String(ch.channel).replace(/^@/, "")}`;
+        }
+        if (link) button.url = link;
+      }
+    }
+  } catch (err) {
+    console.log("Legacy Force Join URL repair error:", err.message);
+  }
+}
+
 try {
   const Telegram = require("telegraf").Telegram;
   const originalCallApi = Telegram.prototype.callApi;
   Telegram.prototype.callApi = async function(method, payload, ...args) {
     try {
+      if (method === "sendMessage" && payload) {
+        await repairLegacyJoinButtons(payload, this);
+      }
       if (method === "sendMessage" && payload && String(payload.text || "").includes("⚙️ ADMIN PANEL") && payload.reply_markup) {
         const kb = payload.reply_markup.inline_keyboard || [];
         if (!kb.some(row => row.some(btn => btn.callback_data === "force_remove_menu"))) {
@@ -195,10 +209,10 @@ try {
 const originalHandleUpdate = Telegraf.prototype.handleUpdate;
 Telegraf.prototype.handleUpdate = async function(update, ...args) {
   try {
-    await purgeLegacyDefault();
-
-    // Do NOT auto-add channels just because the bot becomes an admin.
-    // Force Join channels must be explicitly added with /addforce.
+    if (update?.my_chat_member) {
+      const handled = await autoRegisterAdminChannel(this, update);
+      if (handled) return true;
+    }
 
     const user = update?.message?.from || update?.callback_query?.from;
     const userId = user?.id;
@@ -217,7 +231,7 @@ Telegraf.prototype.handleUpdate = async function(update, ...args) {
 
       if (isAdmin && callback.startsWith("force_rm_")) {
         const id = callback.slice("force_rm_".length);
-        try { await this.telegram.answerCbQuery(update.callback_query.id, "Deleting..."); } catch {}
+        try { await this.telegram.answerCbQuery(update.callback_query.id, "Removing..."); } catch {}
         return removeForceById(this, userId, id);
       }
 
