@@ -8,7 +8,7 @@ async function cfg(server){return Config.findOneAndUpdate({server},{server},{ups
 function menu(server,c){const title=server==='vak'?'VAK-SMS':'5SIM';return Markup.inlineKeyboard([
  [Markup.button.callback('📥 Import / Sync All',`nsi_import_${server}`)],
  [Markup.button.callback('🗑 Remove All',`nsi_remove_${server}`)],
- [Markup.button.callback('💰 Set Price',`nsi_price_${server}`),Markup.button.callback('📈 Set Profit %',`nsi_profit_${server}`)],
+ [Markup.button.callback('💰 Set Price',`sp23_price_${server}`),Markup.button.callback('📈 Set Profit %',`sp23_profit_${server}`)],
  [Markup.button.callback('🌍 Add Country',`vfix_${server}_add_country`),Markup.button.callback('🗑 Remove Country',`vfix_${server}_del_country`)],
  [Markup.button.callback('📦 Add Service',`vfix_${server}_add_service`),Markup.button.callback('🗑 Remove Service',`vfix_${server}_del_service`)],
  [Markup.button.callback('📋 Countries List',`nsl_${server}_countries_1`),Markup.button.callback('📋 Services List',`nsl_${server}_services_1`)],
