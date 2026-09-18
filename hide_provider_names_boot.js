@@ -8,8 +8,8 @@ function cleanString(s){
     .replace(/Server\s*1\s*[•·-]\s*TempoSMS/gi,'Server 1')
     .replace(/Server\s*1\s*[•·-]\s*TEMPOSMS/gi,'Server 1')
     .replace(/TempoSMS/gi,'Server 1')
-    .replace(/VAK-SMS/gi,'Server 2')
-    .replace(/5SIM/gi,'Server 3')
+    .replace(/VAK[- ]?SMS/gi,'Server 2')
+    .replace(/5SIM(?:\.NET)?/gi,'Server 3')
     .replace(/TEMPO\s*SMS/gi,'Server 1');
 
   // Never allow the provider-name scrubber to create duplicated server labels.
