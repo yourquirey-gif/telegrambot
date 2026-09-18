@@ -1,9 +1,8 @@
-const { Telegraf } = require('telegraf');
+const { Telegraf, Markup } = require('telegraf');
 
-// Bind every live-catalog service click to the server the user most recently
-// selected. This prevents a stale/wrong fsvc:<server>:... callback from
-// jumping to Server 1 after a Server 2/3 service search.
-const selectedServer = new Map();
+// Server selection must ALWAYS be determined by the callback that was
+// actually clicked. Never keep a per-user remembered server here: that can
+// make a later Server 1/3 click inherit Server 2.
 const previous = Telegraf.prototype.handleUpdate;
 
 Telegraf.prototype.handleUpdate = async function(update, ...args) {
@@ -12,35 +11,28 @@ Telegraf.prototype.handleUpdate = async function(update, ...args) {
     const uid = q?.from?.id;
     const cb = q?.data || '';
 
-    if (uid && q) {
-      let server = null;
-      if (cb === 'ns_user_vak') server = 'vak';
-      else if (cb === 'ns_user_5sim') server = '5sim';
-      else if (cb === 'tempo_user') server = 'tempo';
-      else if (cb.startsWith('fsearch2:')) server = cb.slice('fsearch2:'.length);
-
-      if (server === 'vak' || server === '5sim' || server === 'tempo') {
-        selectedServer.set(String(uid), server);
+    if (q && uid) {
+      // Normalize the server menu to the real mapping:
+      // Server 1 = TemporaSMS, Server 2 = VAK-SMS, Server 3 = 5SIM.
+      if (cb === 'ns_user_menu') {
+        try { await this.telegram.answerCbQuery(q.id); } catch {}
+        return this.telegram.sendMessage(uid, '🖥 NUMBER SERVERS\n\nChoose a number server:', Markup.inlineKeyboard([
+          [Markup.button.callback('🟢 Server 1', 'tempo_user')],
+          [Markup.button.callback('🔵 Server 2', 'ns_user_vak')],
+          [Markup.button.callback('🟣 Server 3', 'ns_user_5sim')],
+          [Markup.button.callback('🏠 Home', 'home')]
+        ]));
       }
 
-      if (cb.startsWith('fsvc:')) {
-        const parts = cb.split(':');
-        const callbackServer = parts[1];
-        const rememberedServer = selectedServer.get(String(uid));
-
-        if (rememberedServer && rememberedServer !== callbackServer) {
-          update = {
-            ...update,
-            callback_query: {
-              ...q,
-              data: 'fsvc:' + rememberedServer + ':' + parts.slice(2).join(':')
-            }
-          };
-        }
+      // These callbacks are explicit and independent. Do not rewrite one
+      // server into another server based on previous user activity.
+      if (cb === 'server_select_1' || cb === 'server_select_2' || cb === 'server_select_3') {
+        const target = cb.endsWith('_1') ? 'tempo_user' : cb.endsWith('_2') ? 'ns_user_vak' : 'ns_user_5sim';
+        update = { ...update, callback_query: { ...q, data: target } };
       }
     }
   } catch (e) {
-    console.log('SERVER SEARCH BINDING FIX:', e.message);
+    console.log('SERVER SELECTION FIX:', e.message);
   }
 
   return previous.call(this, update, ...args);
