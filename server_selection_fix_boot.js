@@ -1,35 +1,46 @@
 const { Telegraf } = require('telegraf');
 
-// Keep the provider selected by the user all the way through purchase.
-// The live catalog uses fbuy:<server>:..., while the legacy purchase flow
-// uses ns_buy_<server>_.... Server 2/3 must never fall through to Server 1.
+// Bind every live-catalog service click to the server the user most recently
+// selected. This prevents a stale/wrong fsvc:<server>:... callback from
+// jumping to Server 1 after a Server 2/3 service search.
+const selectedServer = new Map();
 const previous = Telegraf.prototype.handleUpdate;
 
 Telegraf.prototype.handleUpdate = async function(update, ...args) {
   try {
     const q = update?.callback_query;
+    const uid = q?.from?.id;
     const cb = q?.data || '';
 
-    if (q && (cb.startsWith('fbuy:vak:') || cb.startsWith('fbuy:5sim:'))) {
-      const p = cb.split(':');
-      const server = p[1];
-      const country = p[2];
-      const service = p.slice(3).join(':');
+    if (uid && q) {
+      let server = null;
+      if (cb === 'ns_user_vak') server = 'vak';
+      else if (cb === 'ns_user_5sim') server = '5sim';
+      else if (cb === 'tempo_user') server = 'tempo';
+      else if (cb.startsWith('fsearch2:')) server = cb.slice('fsearch2:'.length);
 
-      // Convert only Server 2/3 live-catalog purchase callbacks into the
-      // existing server-aware purchase callback. This preserves the exact
-      // selected server instead of allowing a generic handler to fall back
-      // to Server 1.
-      update = {
-        ...update,
-        callback_query: {
-          ...q,
-          data: `ns_buy_${server}_${country}_${service}`
+      if (server === 'vak' || server === '5sim' || server === 'tempo') {
+        selectedServer.set(String(uid), server);
+      }
+
+      if (cb.startsWith('fsvc:')) {
+        const parts = cb.split(':');
+        const callbackServer = parts[1];
+        const rememberedServer = selectedServer.get(String(uid));
+
+        if (rememberedServer && rememberedServer !== callbackServer) {
+          update = {
+            ...update,
+            callback_query: {
+              ...q,
+              data: 'fsvc:' + rememberedServer + ':' + parts.slice(2).join(':')
+            }
+          };
         }
-      };
+      }
     }
   } catch (e) {
-    console.log('SERVER SELECTION FIX:', e.message);
+    console.log('SERVER SEARCH BINDING FIX:', e.message);
   }
 
   return previous.call(this, update, ...args);
