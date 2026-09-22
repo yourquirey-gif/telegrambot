@@ -296,7 +296,7 @@ async function loadDefaultForce(){
 
 }
 
- loadDefaultForce();
+ // Force Join is manual-only.\n // loadDefaultForce();
 
 // ================= VAK-SMS API CONFIG =================
 
@@ -535,61 +535,32 @@ async function checkForceJoin(ctx){
 async function sendHome(ctx){
     const userId = ctx.from.id;
     const username = ctx.from.username ? "@" + ctx.from.username : ctx.from.first_name;
+    let user = await User.findOne({userId:String(userId)});
+    if(!user){
+        user = await User.create({userId:String(userId), username, joined:new Date().toLocaleString()});
+    }
+    if(user.banned) return ctx.reply("❌ You are banned from using this bot.");
 
-let user = await User.findOne({
-   userId: String(userId)
-});
+    const admin = await isAdmin(userId);
+    const rows = [
+        ["📞 GET NUMBER", "📲 TRAFFIC"],
+        ["👥 REFER", "👤 PROFILE"],
+        ["🏆 LEADERBOARD"]
+    ];
+    if(admin) rows.push(["🛠 ADMIN PANEL"]);
 
-if(!user){
+    const premium = process.env.WELCOME_PREMIUM_EMOJI_ID;
+    const icon = premium ? `<tg-emoji emoji-id="${String(premium)}">👋</tg-emoji>` : "👋";
+    return ctx.reply(
+`${icon} <b>Welcome to OTP Bot!</b>
 
-   user = await User.create({
+⚡ Fast delivery
+🔐 Secure numbers
+🔄 Change anytime
 
-      userId: String(userId),
-
-      username: username,
-
-      joined:
-      new Date().toLocaleString()
-
-   });
-
-}
-   if(user.banned){
-
-   return ctx.reply(
-      "❌ You are banned from using this bot."
-   );
-
-}
-    const credits = user.credits;
-    let bar = "▰".repeat(Math.min(credits, 10)) + "▱".repeat(Math.max(0, 10 - credits));
-
-    ctx.reply(
-`╔══════════════════════╗
- 🔥 OTP MONITOR BOT 🔥
-╚══════════════════════╝
-
-👤 USER : ${username}
-🆔 USER ID : <code>${userId}</code>
-
-💎 BALANCE : ${credits} credits
-[${bar}]
-
-⚡ COST / OTP : Depends on service
-✅ Charged only if NEW OTP arrives
-
-🏆 #Top Whole TG We Provide Cheap Numbers For Any Services
-
-━━━━━━━━━━━━━━━━━━`,
-{
-    parse_mode:"HTML",
-    ...Markup.inlineKeyboard([
-        [Markup.button.callback("🟢 Get Number", "devices_1")],
-        [Markup.button.callback("💎 My Credits", "credits"), Markup.button.callback("🎁 Tasks", "tasks")],
-        [Markup.button.callback("👥 Referral", "referral"), Markup.button.callback("🛒 Buy Credits", "buy")],
-        [Markup.button.callback("👤 Profile", "profile")]
-    ])
-});
+<i>Choose an option below to begin:</i>`,
+        {parse_mode:"HTML", ...Markup.keyboard(rows).resize().persistent()}
+    );
 }
 
 // ================= START =================
@@ -716,52 +687,16 @@ Markup.button.url(
 
     }
    try{
-
-   await bot.telegram.sendMessage(
-
-      LOG_CHANNEL,
-
-`🆕 NEW USER JOINED
+      await bot.telegram.sendMessage(LOG_CHANNEL,`🆕 NEW USER JOINED
 
 👤 Name:
 ${username}
 
 🆔 User ID:
-${userId}`
+${userId}`);
+   }catch{}
 
-   );
-
-}catch{}
-
- if(
-!user.verified ||
-!user.ipHash ||
-!user.browserInfo
-){
-
-return ctx.reply(
-
-`🔐 VERIFY YOURSELF
-
-To prevent fake referrals and spam,
-please verify yourself first.`,
-
-Markup.inlineKeyboard([
-
-[
-Markup.button.url(
-"✅ Verify Yourself",
-`https://telegrambot-mas3.onrender.com/verify/${ctx.from.id}`
-)
-]
-
-])
-
-);
-
-}
-
-return sendHome(ctx);
+   return sendHome(ctx);
    
 });
 
