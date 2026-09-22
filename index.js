@@ -543,9 +543,9 @@ async function sendHome(ctx){
 
     const admin = await isAdmin(userId);
     const rows = [
-        ["📞 GET NUMBER", "📲 TRAFFIC"],
-        ["👥 REFER", "👤 PROFILE"],
-        ["🏆 LEADERBOARD"]
+        ["📞 GET NUMBER", "💰 BALANCE"],
+        ["👥 REFER AND EARN", "💬 SUPPORT"],
+        ["📊 STATUS"]
     ];
     if(admin) rows.push(["🛠 ADMIN PANEL"]);
 
