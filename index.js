@@ -542,12 +542,15 @@ async function sendHome(ctx){
     if(user.banned) return ctx.reply("❌ You are banned from using this bot.");
 
     const admin = await isAdmin(userId);
+    // Telegram Bot API supports button styles: success=green, primary=blue, danger=red.
+    // Use objects here so each home button gets the requested color.
+    const btn = (text, style) => ({ text, style });
     const rows = [
-        ["📞 GET NUMBER", "💰 BALANCE"],
-        ["👥 REFER AND EARN", "💬 SUPPORT"],
-        ["📊 STATUS"]
+        [btn("📞 GET NUMBER", "success"), btn("💰 BALANCE", "primary")],
+        [btn("👥 REFER AND EARN", "primary"), btn("💬 SUPPORT", "primary")],
+        [btn("📊 STATUS", "primary")]
     ];
-    if(admin) rows.push(["🛠 ADMIN PANEL"]);
+    if(admin) rows.push([btn("🛠 ADMIN PANEL", "danger")]);
 
     const premium = process.env.WELCOME_PREMIUM_EMOJI_ID;
     const icon = premium ? `<tg-emoji emoji-id="${String(premium)}">👋</tg-emoji>` : "👋";
